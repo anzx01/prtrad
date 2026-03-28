@@ -1,0 +1,107 @@
+{
+  "last_updated": "2026-03-28 21:57:10 +08:00",
+  "project": "Polymarket Tail Risk Web 应用",
+  "phase": "开发进行中",
+  "current_wave": "Wave 1",
+  "completed": [
+    "v4_research_prd_finalized",
+    "web_architecture_plan_finalized",
+    "m1_m2_backlog_finalized",
+    "wave1_execution_packages_finalized",
+    "tech_stack_and_team_split_confirmed",
+    "pkg_plat_01_completed",
+    "pkg_data_01_completed",
+    "pkg_plat_02_completed",
+    "pkg_data_02_completed"
+  ],
+  "in_progress": [
+    "ready_for_pkg_data_03",
+    "ready_for_pkg_plat_03"
+  ],
+  "next_task": "PKG-DATA-03",
+  "next_actions_ordered": [
+    "PKG-DATA-03",
+    "PKG-PLAT-03",
+    "PKG-RISK-01"
+  ],
+  "source_documents": [
+    "polymarket_tail_risk_system_v4_research_prd.md",
+    "polymarket_tail_risk_web_app_architecture_plan.md",
+    "polymarket_tail_risk_m1_m2_backlog.md",
+    "polymarket_tail_risk_wave1_execution_packages.md"
+  ],
+  "checkpoint_policy": {
+    "update_after_each_package": true,
+    "files_to_update": [
+      "SESSION_STATUS.md",
+      "SESSION_STATUS.json",
+      "WORKLOG.md"
+    ]
+  },
+  "known_risks": [
+    "agent_disconnects",
+    "audit_or_version_fields_being_skipped",
+    "drift_from_module_contracts",
+    "public_feed_full_scan_cost",
+    "snapshot_only_supports_binary_yes_no_markets"
+  ],
+  "verification": {
+    "pkg_plat_01": {
+      "web_status": 200,
+      "api_status": 200,
+      "worker_status": "ready",
+      "notes": "初始骨架验证已完成；当时任务运行时尚未切换到 SQLite 方案。"
+    },
+    "pkg_data_01": {
+      "migration_upgrade": "ok",
+      "migration_downgrade": "ok",
+      "core_tables": [
+        "markets",
+        "market_snapshots",
+        "data_quality_results",
+        "decision_logs",
+        "audit_logs"
+      ]
+    },
+    "pkg_plat_02": {
+      "worker_manual_task": "ok",
+      "beat_schedule": "ok",
+      "root_dev_stack": {
+        "web_status": 200,
+        "api_status": 200
+      },
+      "notes": "Wave 1 中 worker 和 beat 使用基于 SQLite 的 Celery 传输层。"
+    },
+    "pkg_data_02": {
+      "migration_upgrade": "ok",
+      "service_smoke_test": {
+        "market_sync_limit_pages_1": {
+          "created": 1817,
+          "updated": 0
+        },
+        "snapshot_limit_5": {
+          "created": 5,
+          "skipped_existing_on_rerun": 5
+        }
+      },
+      "full_active_feed_sync": {
+        "pages": 99,
+        "fetched_markets": 59148,
+        "created": 8050,
+        "updated": 1149,
+        "duration_seconds_approx": 233
+      },
+      "worker_validation": {
+        "market_sync_task": "ok",
+        "snapshot_dispatcher": "ok",
+        "snapshot_executor_created": 4,
+        "snapshot_executor_skipped_missing_mapping": 1
+      },
+      "database_state": {
+        "markets_count": 59148,
+        "market_snapshots_count": 9
+      },
+      "notes": "默认市场同步频率已调整为 900 秒，默认快照市场上限已调整为 200。"
+    }
+  }
+}
