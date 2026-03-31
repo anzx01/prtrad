@@ -34,3 +34,5 @@
 
 - `npm run task:market-sync`
 - `npm run task:snapshot-sync`
+- `npm run task:dq-run`
+- `npm run task:tagging-run`

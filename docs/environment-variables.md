@@ -33,3 +33,13 @@
 - `INGEST_SNAPSHOT_INTERVAL_SECONDS`：快照采样调度频率，单位秒
 - `INGEST_SNAPSHOT_TARGET_SIZE`：NO 侧累计深度计算使用的目标份额
 - `INGEST_SNAPSHOT_MARKET_LIMIT`：快照任务单次处理的市场上限；默认值建议保留在 `200` 左右，`0` 表示不限制
+- `DQ_RULE_VERSION`：DQ 规则版本标识，写入 `data_quality_results.rule_version`
+- `DQ_RUN_INTERVAL_SECONDS`：DQ 定时扫描频率，单位秒
+- `DQ_MARKET_LIMIT`：DQ 单次评估的市场上限；默认建议与快照覆盖子集保持一致
+- `DQ_SNAPSHOT_STALE_AFTER_SECONDS`：最新快照超过该阈值即判定为过期
+- `DQ_SOURCE_STALE_AFTER_SECONDS`：市场元数据超过该阈值未更新时给出 stale warning
+- `DQ_MAX_MID_PRICE_JUMP_ABS`：相邻快照 NO 中间价绝对跳变告警阈值
+- `DQ_WARNING_SPREAD_THRESHOLD`：触发宽 spread warning 的阈值
+- `DQ_SNAPSHOT_FUTURE_TOLERANCE_SECONDS`：允许的时间漂移容忍窗口；超过后判定为未来数据泄漏风险
+- `TAGGING_RUN_INTERVAL_SECONDS`：自动分类定时任务频率，单位秒；默认值为 `0`，表示默认不自动调度
+- `TAGGING_MARKET_LIMIT`：自动分类单次处理的市场上限；默认建议与研究模式市场子集保持一致

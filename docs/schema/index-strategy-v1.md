@@ -28,7 +28,7 @@ Wave 1 的索引主要优化以下查询：
 
 - `status`
 - `rule_version`
-- `market_ref_id + checked_at` 复合索引
+- `market_ref_id + checked_at + rule_version` 唯一索引（用于 DQ 结果幂等）
 
 ### Decision logs
 
@@ -50,3 +50,17 @@ Wave 1 的索引主要优化以下查询：
 - `request_id`
 - `task_id`
 - `object_type + object_id` 复合索引
+
+### Tagging
+
+- `tag_dictionary_entries.tag_code` 唯一约束
+- `tag_dictionary_entries.tag_type + dimension` 复合索引（按维度查询标签字典）
+- `tag_rule_versions.version_code` 唯一约束
+- `tag_rule_versions.status + created_at` 复合索引（快速定位最近版本与 active 版本）
+- `tag_rules.rule_version_id + rule_code` 唯一约束（单版本内部规则编号不冲突）
+- `tag_rules.rule_version_id + priority` 复合索引（按优先级顺序执行）
+- `market_classification_results.market_ref_id + rule_version + source_fingerprint` 唯一索引（分类幂等）
+- `market_classification_results.status + classified_at` 复合索引（最近分类状态查询）
+- `market_tag_assignments.market_ref_id + tag_code` 复合索引（按市场或标签查询）
+- `market_tag_explanations.classification_result_id + rule_code` 复合索引（按结果回放解释）
+- `market_review_tasks.queue_status + created_at` 复合索引（审核队列拉取）

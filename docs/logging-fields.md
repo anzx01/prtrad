@@ -18,4 +18,6 @@
 - `signal_id`
 - `event_type`
 - `result`
-
+- `object_type`
+- `object_id`
+- `action`

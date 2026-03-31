@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-03-28 21:57:10 +08:00",
+  "last_updated": "2026-03-29 09:47:06 +08:00",
   "project": "Polymarket Tail Risk Web 应用",
   "phase": "开发进行中",
   "current_wave": "Wave 1",
@@ -12,17 +12,18 @@
     "pkg_plat_01_completed",
     "pkg_data_01_completed",
     "pkg_plat_02_completed",
-    "pkg_data_02_completed"
+    "pkg_data_02_completed",
+    "pkg_data_03_completed",
+    "pkg_plat_03_completed",
+    "pkg_risk_01_completed",
+    "pkg_risk_02_completed"
   ],
   "in_progress": [
-    "ready_for_pkg_data_03",
-    "ready_for_pkg_plat_03"
+    "ready_for_pkg_risk_03"
   ],
-  "next_task": "PKG-DATA-03",
+  "next_task": "PKG-RISK-03",
   "next_actions_ordered": [
-    "PKG-DATA-03",
-    "PKG-PLAT-03",
-    "PKG-RISK-01"
+    "PKG-RISK-03"
   ],
   "source_documents": [
     "polymarket_tail_risk_system_v4_research_prd.md",
@@ -43,7 +44,10 @@
     "audit_or_version_fields_being_skipped",
     "drift_from_module_contracts",
     "public_feed_full_scan_cost",
-    "snapshot_only_supports_binary_yes_no_markets"
+    "snapshot_only_supports_binary_yes_no_markets",
+    "dq_default_scope_is_snapshot_covered_subset",
+    "tagging_structured_match_is_placeholder",
+    "tagging_rule_coverage_for_non_crypto_is_low"
   ],
   "verification": {
     "pkg_plat_01": {
@@ -102,6 +106,148 @@
         "market_snapshots_count": 9
       },
       "notes": "默认市场同步频率已调整为 900 秒，默认快照市场上限已调整为 200。"
+    },
+    "pkg_data_03": {
+      "migration_upgrade": "ok",
+      "service_smoke_test": {
+        "snapshot_limit_20": {
+          "created": 19,
+          "skipped_missing_mapping": 1
+        },
+        "dq_limit_20": {
+          "created": 20,
+          "pass": 11,
+          "warn": 0,
+          "fail": 9
+        }
+      },
+      "idempotency_check": {
+        "same_checked_at_skipped_existing": 5
+      },
+      "worker_validation": {
+        "snapshot_dispatcher": "ok",
+        "dq_dispatcher": "ok",
+        "dq_executor": {
+          "selected_markets": 10,
+          "created": 10,
+          "pass": 4,
+          "warn": 0,
+          "fail": 6,
+          "alerts_emitted": 6
+        }
+      },
+      "database_state": {
+        "data_quality_results_count": 38,
+        "status_counts": {
+          "pass": 16,
+          "fail": 22
+        }
+      },
+      "beat_schedule_keys": [
+        "dispatch-market-dq-scan",
+        "dispatch-market-sync",
+        "dispatch-snapshot-capture",
+        "system-heartbeat-every-minute"
+      ],
+      "notes": "DQ 默认只评估研究模式下的快照覆盖子集，且当前 warning 样本仍较少。"
+    },
+    "pkg_plat_03": {
+      "api_request_audit": "ok",
+      "worker_success_audit": {
+        "market_snapshot_capture": "ok",
+        "market_dq_scan": "ok"
+      },
+      "worker_failure_audit": {
+        "retry_scheduled": 3,
+        "execute_failed": 1
+      },
+      "database_state": {
+        "audit_logs_count": 9,
+        "object_counts": {
+          "api_request": 1,
+          "market_snapshot_capture": 2,
+          "market_dq_scan": 2,
+          "worker_task": 4
+        }
+      },
+      "notes": "审计写入失败默认降级为日志，不阻塞主业务流程。"
+    },
+    "pkg_risk_01": {
+      "migration_upgrade": "ok",
+      "dictionary_seed": {
+        "created": 24,
+        "updated": 0,
+        "total": 24
+      },
+      "version_workflow": {
+        "create_activate_v1": "ok",
+        "create_activate_v2": "ok",
+        "rollback_clone": {
+          "version_code": "tag_v1_20260329_rb1",
+          "release_kind": "rollback",
+          "status": "active",
+          "base_version_code": "tag_v1_20260329_smoke1",
+          "supersedes_version_code": "tag_v1_20260329_smoke2"
+        }
+      },
+      "active_version": {
+        "version_code": "tag_v1_20260329_rb1",
+        "release_kind": "rollback",
+        "status": "active"
+      },
+      "database_state": {
+        "audit_logs_count": 15,
+        "object_counts": {
+          "api_request": 1,
+          "market_snapshot_capture": 2,
+          "market_dq_scan": 2,
+          "worker_task": 4,
+          "tag_dictionary_catalog": 1,
+          "tag_rule_version": 5
+        }
+      },
+      "notes": "当前已完成标签字典、规则版本、回滚和审计底座。"
+    },
+    "pkg_risk_02": {
+      "migration_upgrade": "ok",
+      "db_current": "20260329_0005 (head)",
+      "service_smoke_test": {
+        "classify_markets_limit_10": {
+          "selected_markets": 10,
+          "created": 10,
+          "Tagged": 2,
+          "ReviewRequired": 8,
+          "Blocked": 0,
+          "review_tasks_created": 8
+        }
+      },
+      "idempotency_check": {
+        "same_classified_at_service_rerun": {
+          "created": 0,
+          "skipped_existing": 5
+        },
+        "same_classified_at_worker_rerun": {
+          "created": 0,
+          "skipped_existing": 5
+        }
+      },
+      "database_state": {
+        "market_classification_results_count": 10,
+        "market_tag_assignments_count": 12,
+        "market_tag_explanations_count": 28,
+        "market_review_tasks_count": 8,
+        "audit_logs_count": 19,
+        "audit_object_counts": {
+          "api_request": 1,
+          "market_snapshot_capture": 2,
+          "market_dq_scan": 2,
+          "worker_task": 5,
+          "tag_dictionary_catalog": 1,
+          "tag_rule_version": 5,
+          "market_auto_tagging": 3
+        }
+      },
+      "notes": "自动分类已打通结果、解释与审核待办；当前 active 规则覆盖偏保守，ReviewRequired 占比较高。"
     }
   }
 }

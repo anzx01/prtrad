@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     ingest_snapshot_interval_seconds: int = 60
     ingest_snapshot_target_size: float = 100.0
     ingest_snapshot_market_limit: int = 200
+    dq_rule_version: str = "dq_v1"
+    dq_run_interval_seconds: int = 120
+    dq_market_limit: int = 200
+    dq_snapshot_stale_after_seconds: int = 300
+    dq_source_stale_after_seconds: int = 86400
+    dq_max_mid_price_jump_abs: float = 0.35
+    dq_warning_spread_threshold: float = 0.25
+    dq_snapshot_future_tolerance_seconds: int = 15
+    tagging_run_interval_seconds: int = 0
+    tagging_market_limit: int = 200
 
     model_config = SettingsConfigDict(
         env_file=".env",

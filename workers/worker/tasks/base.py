@@ -6,6 +6,8 @@ from typing import Any
 
 from celery import Task
 
+from common import record_worker_task_failure, record_worker_task_retry
+
 
 logger = logging.getLogger("ptr.worker.tasks")
 
@@ -26,6 +28,12 @@ class BaseTask(Task):
             "task retry scheduled",
             extra={"task_id": task_id},
         )
+        record_worker_task_retry(
+            task_id=task_id,
+            task_name=self.name,
+            reason=str(exc),
+            retry_count=self.request.retries,
+        )
 
     def on_failure(
         self,
@@ -39,4 +47,9 @@ class BaseTask(Task):
             "task failed",
             extra={"task_id": task_id},
         )
-
+        record_worker_task_failure(
+            task_id=task_id,
+            task_name=self.name,
+            reason=str(exc),
+            kwargs=kwargs,
+        )

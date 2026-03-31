@@ -38,6 +38,16 @@ class WorkerSettings:
     ingest_snapshot_interval_seconds = _get_int("INGEST_SNAPSHOT_INTERVAL_SECONDS", 60)
     ingest_snapshot_target_size = _get_float("INGEST_SNAPSHOT_TARGET_SIZE", 100.0)
     ingest_snapshot_market_limit = _get_int("INGEST_SNAPSHOT_MARKET_LIMIT", 200)
+    dq_rule_version = os.getenv("DQ_RULE_VERSION", "dq_v1")
+    dq_run_interval_seconds = _get_int("DQ_RUN_INTERVAL_SECONDS", 120)
+    dq_market_limit = _get_int("DQ_MARKET_LIMIT", 200)
+    dq_snapshot_stale_after_seconds = _get_int("DQ_SNAPSHOT_STALE_AFTER_SECONDS", 300)
+    dq_source_stale_after_seconds = _get_int("DQ_SOURCE_STALE_AFTER_SECONDS", 86400)
+    dq_max_mid_price_jump_abs = _get_float("DQ_MAX_MID_PRICE_JUMP_ABS", 0.35)
+    dq_warning_spread_threshold = _get_float("DQ_WARNING_SPREAD_THRESHOLD", 0.25)
+    dq_snapshot_future_tolerance_seconds = _get_int("DQ_SNAPSHOT_FUTURE_TOLERANCE_SECONDS", 15)
+    tagging_run_interval_seconds = _get_int("TAGGING_RUN_INTERVAL_SECONDS", 0)
+    tagging_market_limit = _get_int("TAGGING_MARKET_LIMIT", 200)
 
 
 settings = WorkerSettings()

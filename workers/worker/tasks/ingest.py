@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 from services.ingest import get_polymarket_ingest_service
+from common import record_worker_audit_event
 from worker.celery_app import celery_app
 from worker.tasks.base import BaseTask
 
@@ -29,6 +30,15 @@ def _parse_triggered_at(value: str | None) -> datetime:
 def dispatch_market_sync(self) -> dict[str, str]:
     triggered_at = _utc_now_iso()
     async_result = run_market_catalog_sync.apply_async(kwargs={"triggered_at": triggered_at})
+    record_worker_audit_event(
+        object_type="market_catalog_sync",
+        object_id=triggered_at,
+        action="dispatch",
+        result="queued",
+        task_id=self.request.id,
+        actor_id=self.name,
+        event_payload={"dispatched_task_id": async_result.id},
+    )
     logger.info(
         "market sync dispatched",
         extra={"task_id": self.request.id},
@@ -54,6 +64,22 @@ def run_market_catalog_sync(
         force_full_scan=force_full_scan,
         limit_pages=limit_pages,
     )
+    record_worker_audit_event(
+        object_type="market_catalog_sync",
+        object_id=parsed_triggered_at.isoformat(),
+        action="execute",
+        result="success",
+        task_id=self.request.id,
+        actor_id=self.name,
+        event_payload={
+            "pages": result.get("pages"),
+            "fetched_markets": result.get("fetched_markets"),
+            "created": result.get("created"),
+            "updated": result.get("updated"),
+            "skipped_unchanged": result.get("skipped_unchanged"),
+            "marked_inactive": result.get("marked_inactive"),
+        },
+    )
     logger.info(
         "market sync completed",
         extra={"task_id": self.request.id},
@@ -65,6 +91,15 @@ def run_market_catalog_sync(
 def dispatch_snapshot_capture(self) -> dict[str, str]:
     triggered_at = _utc_now_iso()
     async_result = capture_active_market_snapshots.apply_async(kwargs={"triggered_at": triggered_at})
+    record_worker_audit_event(
+        object_type="market_snapshot_capture",
+        object_id=triggered_at,
+        action="dispatch",
+        result="queued",
+        task_id=self.request.id,
+        actor_id=self.name,
+        event_payload={"dispatched_task_id": async_result.id},
+    )
     logger.info(
         "snapshot capture dispatched",
         extra={"task_id": self.request.id},
@@ -87,6 +122,21 @@ def capture_active_market_snapshots(
     result = service.capture_snapshots(
         triggered_at=parsed_triggered_at,
         market_limit=market_limit,
+    )
+    record_worker_audit_event(
+        object_type="market_snapshot_capture",
+        object_id=parsed_triggered_at.isoformat(),
+        action="execute",
+        result="success",
+        task_id=self.request.id,
+        actor_id=self.name,
+        event_payload={
+            "selected_markets": result.get("selected_markets"),
+            "created": result.get("created"),
+            "skipped_existing": result.get("skipped_existing"),
+            "skipped_missing_mapping": result.get("skipped_missing_mapping"),
+            "skipped_missing_order_books": result.get("skipped_missing_order_books"),
+        },
     )
     logger.info(
         "snapshot capture completed",

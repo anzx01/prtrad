@@ -1,10 +1,10 @@
 import logging
-import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 
 from app.config import get_settings
 from app.logging_utils import bind_log_context, configure_logging
+from middleware import request_context_middleware
 
 settings = get_settings()
 configure_logging(
@@ -16,14 +16,7 @@ configure_logging(
 app = FastAPI(title="Polymarket Tail Risk API", version="0.1.0")
 logger = logging.getLogger("ptr.api")
 
-
-@app.middleware("http")
-async def add_request_context(request: Request, call_next):
-    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["x-request-id"] = request_id
-    return response
+app.middleware("http")(request_context_middleware)
 
 
 @app.get("/health")
@@ -36,4 +29,3 @@ def health():
         "environment": settings.app_env,
         "rule_version": settings.rule_version,
     }
-

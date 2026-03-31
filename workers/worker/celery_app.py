@@ -17,7 +17,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    imports=("worker.tasks.system", "worker.tasks.ingest"),
+    imports=("worker.tasks.system", "worker.tasks.ingest", "worker.tasks.dq", "worker.tasks.tagging"),
     task_default_queue="default",
     worker_hijack_root_logger=False,
     task_track_started=True,
@@ -37,6 +37,20 @@ celery_app.conf.update(
             "task": "worker.ingest.dispatch_snapshot_capture",
             "schedule": timedelta(seconds=settings.ingest_snapshot_interval_seconds),
         },
+        "dispatch-market-dq-scan": {
+            "task": "worker.dq.dispatch_market_dq_scan",
+            "schedule": timedelta(seconds=settings.dq_run_interval_seconds),
+        },
+        **(
+            {
+                "dispatch-market-auto-tagging": {
+                    "task": "worker.tagging.dispatch_market_auto_classification",
+                    "schedule": timedelta(seconds=settings.tagging_run_interval_seconds),
+                }
+            }
+            if settings.tagging_run_interval_seconds > 0
+            else {}
+        ),
     },
     beat_scheduler="celery.beat.PersistentScheduler",
     beat_schedule_filename=settings.celery_beat_schedule_db,
