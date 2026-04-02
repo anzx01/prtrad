@@ -17,7 +17,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    imports=("worker.tasks.system", "worker.tasks.ingest", "worker.tasks.dq", "worker.tasks.tagging"),
+    imports=("worker.tasks.system", "worker.tasks.ingest", "worker.tasks.dq", "worker.tasks.tagging", "worker.tasks.scoring"),
     task_default_queue="default",
     worker_hijack_root_logger=False,
     task_track_started=True,
@@ -49,6 +49,16 @@ celery_app.conf.update(
                 }
             }
             if settings.tagging_run_interval_seconds > 0
+            else {}
+        ),
+        **(
+            {
+                "dispatch-market-scoring": {
+                    "task": "scoring.score_classified_markets",
+                    "schedule": timedelta(seconds=settings.scoring_run_interval_seconds),
+                }
+            }
+            if settings.scoring_run_interval_seconds > 0
             else {}
         ),
     },

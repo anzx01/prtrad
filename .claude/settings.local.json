@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m alembic upgrade head)",
+      "Bash(python -m py_compile apps/api/services/scoring/service.py)",
+      "Bash(python -m py_compile workers/worker/tasks/scoring.py)",
+      "Bash(python -m py_compile apps/api/db/models.py)"
+    ]
+  }
+}
