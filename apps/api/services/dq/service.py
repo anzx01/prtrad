@@ -112,30 +112,46 @@ class MarketDataQualityService:
             markets = session.scalars(stmt).all()
             stats["selected_markets"] = len(markets)
 
+            if not markets:
+                return stats
+
+            market_ids = [market.id for market in markets]
+
             existing_market_ids = set(
                 session.scalars(
                     select(DataQualityResult.market_ref_id).where(
                         DataQualityResult.checked_at == checked_at,
                         DataQualityResult.rule_version == self._settings.dq_rule_version,
-                        DataQualityResult.market_ref_id.in_([market.id for market in markets]),
+                        DataQualityResult.market_ref_id.in_(market_ids),
                     )
                 ).all()
-            ) if markets else set()
+            )
+
+            # Batch load snapshots for all markets to avoid N+1 queries
+            snapshots_query = (
+                select(MarketSnapshot)
+                .where(MarketSnapshot.market_ref_id.in_(market_ids))
+                .order_by(MarketSnapshot.market_ref_id, MarketSnapshot.snapshot_time.desc())
+            )
+            all_snapshots = session.scalars(snapshots_query).all()
+
+            # Group snapshots by market_id
+            snapshots_by_market: dict[Any, list[MarketSnapshot]] = {}
+            for snapshot in all_snapshots:
+                if snapshot.market_ref_id not in snapshots_by_market:
+                    snapshots_by_market[snapshot.market_ref_id] = []
+                if len(snapshots_by_market[snapshot.market_ref_id]) < 2:
+                    snapshots_by_market[snapshot.market_ref_id].append(snapshot)
 
             for market in markets:
                 if market.id in existing_market_ids:
                     stats["skipped_existing"] += 1
                     continue
 
-                latest_snapshots = session.scalars(
-                    select(MarketSnapshot)
-                    .where(MarketSnapshot.market_ref_id == market.id)
-                    .order_by(MarketSnapshot.snapshot_time.desc())
-                    .limit(2)
-                ).all()
+                market_snapshots = snapshots_by_market.get(market.id, [])
+                latest_snapshot = market_snapshots[0] if market_snapshots else None
+                previous_snapshot = market_snapshots[1] if len(market_snapshots) > 1 else None
 
-                latest_snapshot = latest_snapshots[0] if latest_snapshots else None
-                previous_snapshot = latest_snapshots[1] if len(latest_snapshots) > 1 else None
                 checks = self._evaluate_market_checks(
                     session=session,
                     market=market,

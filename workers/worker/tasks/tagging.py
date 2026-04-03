@@ -17,13 +17,18 @@ def _utc_now_iso() -> str:
 
 
 def _parse_classified_at(value: str | None) -> datetime:
-    if not value:
-        return datetime.now(UTC).replace(microsecond=0)
-    normalized = value.replace("Z", "+00:00")
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    """Parse classified_at timestamp with error handling."""
+    try:
+        if not value:
+            return datetime.now(UTC).replace(microsecond=0)
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+    except (ValueError, AttributeError) as e:
+        logger.error(f"Failed to parse classified_at value: {value}", exc_info=True)
+        raise ValueError(f"Invalid classified_at format: {value}") from e
 
 
 @celery_app.task(name="worker.tagging.dispatch_market_auto_classification", bind=True, base=BaseTask)

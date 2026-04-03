@@ -28,6 +28,15 @@ ACTIVE_TAGGING_VERSION_STATUS = "active"
 CLASSIFIABLE_MARKET_STATUSES = ("active_accepting_orders", "active_open", "active_paused")
 SYSTEM_RULE_CODE_PREFIX = "SYSTEM"
 
+# Confidence calculation constants
+CONFIDENCE_PENALTY_NO_CATEGORY = 0.35
+CONFIDENCE_PENALTY_GREY_BUCKET = 0.10
+CONFIDENCE_PENALTY_BLACK_BUCKET = 0.20
+CONFIDENCE_PENALTY_CATEGORY_CONFLICT = 0.20
+CONFIDENCE_PENALTY_BUCKET_CONFLICT = 0.10
+CONFIDENCE_PENALTY_PER_CONFLICT = 0.05
+CONFIDENCE_PENALTY_MAX_CONFLICTS = 0.20
+
 
 def _now_utc() -> datetime:
     return datetime.now(UTC)
@@ -708,19 +717,24 @@ class MarketAutoClassificationService:
         if selected_category_code and selected_category_code in category_candidates:
             confidence = float(category_candidates[selected_category_code]["confidence"])
 
+        # Apply penalties using constants
         if not selected_category_code:
-            confidence -= 0.35
+            confidence -= CONFIDENCE_PENALTY_NO_CATEGORY
         if selected_bucket_code == "LIST_GREY":
-            confidence -= 0.10
+            confidence -= CONFIDENCE_PENALTY_GREY_BUCKET
         if selected_bucket_code == "LIST_BLACK":
-            confidence -= 0.20
+            confidence -= CONFIDENCE_PENALTY_BLACK_BUCKET
         if len(category_candidates) > 1:
-            confidence -= 0.20
+            confidence -= CONFIDENCE_PENALTY_CATEGORY_CONFLICT
         if len(bucket_candidates) > 1:
-            confidence -= 0.10
+            confidence -= CONFIDENCE_PENALTY_BUCKET_CONFLICT
         if requires_review:
             confidence = min(confidence, low_confidence_threshold - 0.05)
-        confidence -= min(0.20, conflict_count * 0.05)
+
+        # Apply conflict penalty with cap
+        conflict_penalty = min(CONFIDENCE_PENALTY_MAX_CONFLICTS, conflict_count * CONFIDENCE_PENALTY_PER_CONFLICT)
+        confidence -= conflict_penalty
+
         return _clamp_confidence(confidence, default=0.0)
 
     @staticmethod

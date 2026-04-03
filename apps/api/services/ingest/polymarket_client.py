@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from httpx import Timeout
 
 
 class PolymarketApiError(RuntimeError):
@@ -11,10 +12,14 @@ class PolymarketApiError(RuntimeError):
 
 class PolymarketGammaClient:
     def __init__(self, base_url: str, timeout_seconds: int) -> None:
+        # Configure retry transport
+        transport = httpx.HTTPTransport(retries=3)
+
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
-            timeout=timeout_seconds,
+            timeout=Timeout(timeout_seconds, connect=5.0),
             headers={"Accept": "application/json"},
+            transport=transport,
         )
 
     def list_events(
@@ -37,8 +42,15 @@ class PolymarketGammaClient:
             "order": order,
             "ascending": str(ascending).lower(),
         }
-        response = self._client.get("/events", params=params)
-        response.raise_for_status()
+
+        try:
+            response = self._client.get("/events", params=params)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise PolymarketApiError(f"Gamma API error: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise PolymarketApiError(f"Gamma API request failed: {e}") from e
+
         payload = response.json()
         if isinstance(payload, list):
             return payload
@@ -50,18 +62,30 @@ class PolymarketGammaClient:
 
 class PolymarketClobClient:
     def __init__(self, base_url: str, timeout_seconds: int) -> None:
+        # Configure retry transport
+        transport = httpx.HTTPTransport(retries=3)
+
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
-            timeout=timeout_seconds,
+            timeout=Timeout(timeout_seconds, connect=5.0),
             headers={"Accept": "application/json", "Content-Type": "application/json"},
+            transport=transport,
         )
 
     def get_order_books(self, token_ids: list[str]) -> list[dict[str, Any]]:
         if not token_ids:
             return []
+
         payload = [{"token_id": token_id} for token_id in token_ids]
-        response = self._client.post("/books", json=payload)
-        response.raise_for_status()
+
+        try:
+            response = self._client.post("/books", json=payload)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise PolymarketApiError(f"CLOB API error: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise PolymarketApiError(f"CLOB API request failed: {e}") from e
+
         books = response.json()
         if isinstance(books, list):
             return books

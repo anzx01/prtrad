@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.config import get_settings
 from app.logging_utils import bind_log_context, configure_logging
+from app.routes import dq, markets, tagging
 from middleware import request_context_middleware
 
 settings = get_settings()
@@ -17,6 +18,11 @@ app = FastAPI(title="Polymarket Tail Risk API", version="0.1.0")
 logger = logging.getLogger("ptr.api")
 
 app.middleware("http")(request_context_middleware)
+
+# Register routers
+app.include_router(markets.router)
+app.include_router(tagging.router)
+app.include_router(dq.router)
 
 
 @app.get("/health")

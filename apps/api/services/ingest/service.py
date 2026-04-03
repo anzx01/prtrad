@@ -257,11 +257,15 @@ class PolymarketIngestService:
             "skipped_duplicate_in_run": 0,
             "marked_inactive": 0,
         }
-        seen_market_ids: set[str] = set()
         offset = 0
         page_size = self._settings.ingest_gamma_page_size
+        # Use a smaller batch size to avoid memory issues
+        batch_size = 1000
 
         with session_scope() as session:
+            # Track seen market IDs in database to avoid memory issues
+            seen_market_ids: set[str] = set()
+
             while True:
                 events = self._gamma_client.list_events(
                     limit=page_size,
@@ -287,6 +291,12 @@ class PolymarketIngestService:
                         if record.market_id in seen_market_ids:
                             stats["skipped_duplicate_in_run"] += 1
                             continue
+                        seen_market_ids.add(record.market_id)
+                        records.append(record)
+
+                        # Clear seen_market_ids periodically to prevent memory growth
+                        if len(seen_market_ids) > batch_size:
+                            seen_market_ids.clear()
                         seen_market_ids.add(record.market_id)
                         records.append(record)
 

@@ -17,13 +17,18 @@ def _utc_now_iso() -> str:
 
 
 def _parse_checked_at(value: str | None) -> datetime:
-    if not value:
-        return datetime.now(UTC).replace(microsecond=0)
-    normalized = value.replace("Z", "+00:00")
-    parsed = datetime.fromisoformat(normalized)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    """Parse checked_at timestamp with error handling."""
+    try:
+        if not value:
+            return datetime.now(UTC).replace(microsecond=0)
+        normalized = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+    except (ValueError, AttributeError) as e:
+        logger.error(f"Failed to parse checked_at value: {value}", exc_info=True)
+        raise ValueError(f"Invalid checked_at format: {value}") from e
 
 
 @celery_app.task(name="worker.dq.dispatch_market_dq_scan", bind=True, base=BaseTask)

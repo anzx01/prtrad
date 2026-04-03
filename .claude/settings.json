@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python /tmp/fix_models.py)",
+      "Bash(python fix_extend_existing.py)",
+      "Bash(python -m pytest tests/ -v --tb=no)",
+      "Bash(python -m pytest tests/test_audit_service.py tests/test_dq_service.py -x --tb=short)",
+      "Bash(python -m pytest tests/test_audit_service.py tests/test_dq_service.py --tb=short)",
+      "Bash(python -m pytest tests/ --tb=short)",
+      "Bash(xargs grep:*)",
+      "Bash(python -m pytest tests/integration/ -v)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py -v)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py::test_list_markets_empty -v)",
+      "Bash(python -m pytest tests/integration/ -v --tb=short)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py::test_list_markets_empty -v --tb=short)",
+      "Bash(python -m pytest tests/integration/ -v --tb=line)",
+      "Bash(python -c \"import os; os.environ['DATABASE_URL']='sqlite:///:memory:'; os.environ['APP_ENV']='test'; import sys; sys.path.insert\\(0, 'apps/api'\\); from db.session import engine; from db.base import Base; Base.metadata.create_all\\(engine\\); print\\('Tables created:', list\\(Base.metadata.tables.keys\\(\\)\\)\\)\")",
+      "Bash(python -c \"import os; os.environ['DATABASE_URL']='sqlite:///:memory:'; os.environ['APP_ENV']='test'; import sys; sys.path.insert\\(0, 'apps/api'\\); from db.base import Base; from db import models; print\\('Tables:', list\\(Base.metadata.tables.keys\\(\\)\\)\\)\")",
+      "Bash(python -m pytest tests/integration/test_api_markets.py -v --tb=short)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py::test_list_markets_empty -xvs)",
+      "Bash(python -c \"import os; os.environ['DATABASE_URL']='sqlite:///:memory:'; os.environ['APP_ENV']='test'; import sys; sys.path.insert\\(0, 'apps/api'\\); from sqlalchemy import create_engine; from sqlalchemy.orm import sessionmaker; from db.base import Base; from db import models; engine = create_engine\\('sqlite:///:memory:', echo=False, connect_args={'check_same_thread': False}\\); Base.metadata.create_all\\(engine\\); print\\('Tables created:', list\\(Base.metadata.tables.keys\\(\\)\\)\\); SessionLocal = sessionmaker\\(bind=engine\\); s = SessionLocal\\(\\); from sqlalchemy import inspect; insp = inspect\\(engine\\); print\\('Tables in DB:', insp.get_table_names\\(\\)\\); s.close\\(\\)\")",
+      "Bash(python -m pytest tests/integration/test_api_markets.py -v --tb=line)",
+      "Bash(python -m pytest tests/test_*.py -v)"
+    ]
+  }
+}
