@@ -57,6 +57,10 @@ class Market(TimestampMixin, Base):
     review_tasks: Mapped[list["MarketReviewTask"]] = relationship(
         back_populates="market", cascade="all, delete-orphan"
     )
+    scoring_results: Mapped[list["MarketScoringResult"]] = relationship(
+        back_populates="market", cascade="all, delete-orphan"
+    )
+
 
 
 class MarketSnapshot(Base):
@@ -296,6 +300,10 @@ class MarketClassificationResult(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    scoring_results: Mapped[list["MarketScoringResult"]] = relationship(
+        back_populates="classification_result", cascade="all, delete-orphan"
+    )
+
 
 
 class MarketTagAssignment(Base):
@@ -389,3 +397,44 @@ class MarketReviewTask(TimestampMixin, Base):
 
     market: Mapped["Market"] = relationship(back_populates="review_tasks")
     classification_result: Mapped["MarketClassificationResult"] = relationship(back_populates="review_task")
+
+
+class MarketScoringResult(Base):
+    """市场评分结果表"""
+
+    __tablename__ = "market_scoring_results"
+    __table_args__ = (
+        Index(
+            "uq_market_scoring_results_market_ref_id_classification_result_id",
+            "market_ref_id",
+            "classification_result_id",
+            unique=True,
+        ),
+        Index("ix_market_scoring_results_admission_recommendation", "admission_recommendation"),
+        Index("ix_market_scoring_results_scored_at", "scored_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    market_ref_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("markets.id", ondelete="CASCADE"), nullable=False
+    )
+    classification_result_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("market_classification_results.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    clarity_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    resolution_objectivity_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    overall_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    admission_recommendation: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    rejection_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    scoring_details: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    market: Mapped["Market"] = relationship(back_populates="scoring_results")
+    classification_result: Mapped["MarketClassificationResult | None"] = relationship(
+        back_populates="scoring_results"
+    )

@@ -1,9 +1,9 @@
 # 会话状态
 
-最后更新时间：2026-03-29 09:47:06 +08:00  
+最后更新时间：2026-04-03 15:30:00 +08:00  
 项目：Polymarket Tail Risk Web App  
 当前阶段：开发进行中  
-当前 Wave：Wave 1（PLAT + DATA + RISK-01/RISK-02 已完成）
+当前 Wave：Wave 1（PLAT + DATA + RISK-01/RISK-02/RISK-03 已完成）
 
 ## 已完成
 
@@ -20,17 +20,24 @@
 11. `PKG-PLAT-03` 已完成。
 12. `PKG-RISK-01` 已完成。
 13. `PKG-RISK-02` 已完成。
+14. `PKG-RISK-03` 已完成。
 
 ## 当前状态
 
 1. 已完成市场元数据采集、快照采集、DQ v1、审计链路与标签规则底座。
 2. 标签字典、规则版本、回滚链路和 tagging 审计已可用。
 3. 自动分类引擎 v1 已可用，已打通分类结果、解释明细与审核待办落库。
-4. 已准备开始 `PKG-RISK-03`（清晰度/客观性评分模块）。
+4. **清晰度/客观性评分模块已完成**：
+   - 实现了 `clarity_score` 和 `resolution_objectivity_score` 计算逻辑
+   - 添加了 `market_scoring_results` 数据库表
+   - 集成了审计日志支持
+   - 创建了 worker 定时任务 `scoring.score_classified_markets`
+   - 数据库迁移已成功运行
+5. 已准备开始 `PKG-RISK-04`（审核任务流）。
 
 ## 下一步动作（严格顺序）
 
-1. 执行 `PKG-RISK-03`。
+1. 执行 `PKG-RISK-04`（审核任务流 ReviewTask）。
 
 ## 权威文档
 
@@ -38,6 +45,7 @@
 2. `polymarket_tail_risk_web_app_architecture_plan.md`
 3. `polymarket_tail_risk_m1_m2_backlog.md`
 4. `polymarket_tail_risk_wave1_execution_packages.md`
+5. `docs/scoring/market-scoring-v1.md`（新增）
 
 ## 风险与备注
 
@@ -53,18 +61,25 @@
 10. `PKG-DATA-03` 已验证：DQ 服务落库、同一 `checked_at` 幂等跳过、worker 调度链路全部打通。
 11. DQ 当前默认只评估研究模式下的快照覆盖子集；若直接扩展到全量活跃市场，会因未采样市场过多而产生大量 stale/incomplete 失败。
 12. `PKG-PLAT-03` 已验证：API 请求审计、worker 成功审计、worker 重试审计、worker 失败审计均已写入 `audit_logs`。
-13. 当前审计链路已覆盖 `api_request`、`market_snapshot_capture`、`market_dq_scan`、`worker_task` 四类对象。
+13. 当前审计链路已覆盖 `api_request`、`market_snapshot_capture`、`market_dq_scan`、`worker_task`、`market_scoring` 五类对象。
 14. `PKG-RISK-01` 已验证：默认标签字典 seed、规则版本创建/激活、历史版本回滚全部成功。
 15. 当前 tagging 审计链路已覆盖 `tag_dictionary_catalog`、`tag_rule_version` 两类对象。
 16. `PKG-RISK-02` 已验证：自动分类计算、分类结果落库、解释落库、审核待办生成均已打通。
 17. 自动分类当前默认以规则匹配为主，`structured_match` 仍主要作为占位类型；复杂结构化规则能力留待后续增强。
 18. 当前默认 active 规则样本对非加密市场覆盖仍不足，`ReviewRequired` 比例较高，属于预期研究阶段现象。
+19. **`PKG-RISK-03` 已完成**：
+    - 评分服务实现了清晰度和客观性两个维度的评分
+    - 评分阈值可配置（默认：批准 0.7，审核 0.5）
+    - 评分结果持久化到 `market_scoring_results` 表
+    - 集成了审计日志，所有评分操作可追溯
+    - Worker 定时任务每 180 秒运行一次（可配置）
+    - 评分详情存储在 JSON 字段中，包含各维度得分和权重
 
 ## 断连恢复清单
 
 1. 下次启动先打开并阅读 `SESSION_STATUS.md`。
-2. 确认“当前状态”中的未完成项。
-3. 从“下一步动作（严格顺序）”里的第一项继续。
+2. 确认"当前状态"中的未完成项。
+3. 从"下一步动作（严格顺序）"里的第一项继续。
 4. 每完成一个任务包后，更新：
    - `SESSION_STATUS.md`
    - `SESSION_STATUS.json`
@@ -72,4 +87,4 @@
 
 ## 新会话接力提示
 
-从 `SESSION_STATUS.md` 继续开发。先执行“下一步动作（严格顺序）”中的第一项，并以 `polymarket_tail_risk_system_v4_research_prd.md` 与 `polymarket_tail_risk_m1_m2_backlog.md` 作为执行依据。下一包优先做 `PKG-RISK-03`。每完成一个任务包后，更新 checkpoint 文件。
+从 `SESSION_STATUS.md` 继续开发。先执行"下一步动作（严格顺序）"中的第一项，并以 `polymarket_tail_risk_system_v4_research_prd.md` 与 `polymarket_tail_risk_m1_m2_backlog.md` 作为执行依据。下一包优先做 `PKG-RISK-04`（审核任务流）。每完成一个任务包后，更新 checkpoint 文件。

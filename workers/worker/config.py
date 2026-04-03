@@ -48,6 +48,8 @@ class WorkerSettings:
     dq_snapshot_future_tolerance_seconds = _get_int("DQ_SNAPSHOT_FUTURE_TOLERANCE_SECONDS", 15)
     tagging_run_interval_seconds = _get_int("TAGGING_RUN_INTERVAL_SECONDS", 0)
     tagging_market_limit = _get_int("TAGGING_MARKET_LIMIT", 200)
+    scoring_run_interval_seconds = _get_int("SCORING_RUN_INTERVAL_SECONDS", 180)
+    scoring_market_limit = _get_int("SCORING_MARKET_LIMIT", 200)
 
 
 settings = WorkerSettings()
