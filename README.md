@@ -2,6 +2,8 @@
 
 一个用于监控和管理 Polymarket 市场尾部风险的 Web 应用程序。系统通过数据采集、质量检查、标签分类、评分和审核流程来识别和管理高风险市场。
 
+![1775309980461](image/README/1775309980461.png)
+
 ## 项目简介
 
 Polymarket Tail Risk 是一个全栈 Web 应用，旨在帮助团队识别、评估和管理 Polymarket 平台上的高风险市场。系统包含以下核心功能：
@@ -51,16 +53,19 @@ prtrad/
 ### 一键启动（推荐）
 
 **Windows 用户**：
+
 ```bash
 start.bat
 ```
 
 **Linux/Mac 用户**：
+
 ```bash
 ./start.sh
 ```
 
 启动脚本会自动：
+
 - 检查 Node.js 和 Python 环境
 - 安装依赖（如果未安装）
 - 创建 Python 虚拟环境（如果不存在）
@@ -89,6 +94,7 @@ npm run dev
 ```
 
 启动后可访问：
+
 - Web 前端：http://localhost:3000
 - API 后端：http://localhost:8000
 - API 文档：http://localhost:8000/docs
@@ -247,6 +253,7 @@ python -m pytest -v
 ```
 
 类型（type）：
+
 - `feat`: 新功能
 - `fix`: Bug 修复
 - `docs`: 文档更新
@@ -256,6 +263,7 @@ python -m pytest -v
 - `chore`: 构建/工具链更新
 
 示例：
+
 ```
 feat: 添加拒绝原因码管理 API
 fix: 修复数据库索引重复问题
@@ -360,5 +368,5 @@ LOG_LEVEL=INFO
 
 ---
 
-**当前状态**：✅ M1-M2 阶段完成，所有测试通过  
+**当前状态**：✅ M1-M2 阶段完成，所有测试通过
 **最后更新**：2026-04-04
