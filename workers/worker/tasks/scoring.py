@@ -10,14 +10,14 @@ from celery import Task
 from celery.utils.log import get_task_logger
 
 from worker.celery_app import celery_app
-from worker.tasks.base import AuditedTask
+from worker.tasks.base import BaseTask
 
 logger = get_task_logger(__name__)
 
 
 @celery_app.task(
     name="scoring.score_classified_markets",
-    base=AuditedTask,
+    base=BaseTask,
     bind=True,
     max_retries=3,
     default_retry_delay=60,

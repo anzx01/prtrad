@@ -15,12 +15,12 @@ def json_type():
 
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
         nullable=False,
     )
 
@@ -87,7 +87,7 @@ class MarketSnapshot(Base):
     traded_volume: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     last_trade_age_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     market: Mapped["Market"] = relationship(back_populates="snapshots")
@@ -116,7 +116,7 @@ class DataQualityResult(Base):
     result_details: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     rule_version: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     market: Mapped["Market"] = relationship(back_populates="dq_results")
@@ -142,7 +142,7 @@ class DecisionLog(Base):
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     task_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     market: Mapped["Market"] = relationship(back_populates="decision_logs")
@@ -165,7 +165,7 @@ class AuditLog(Base):
     task_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     event_payload: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
 
@@ -183,7 +183,7 @@ class TagDictionaryEntry(TimestampMixin, Base):
     dimension: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     aliases: Mapped[list | None] = mapped_column(json_type(), nullable=True)
-    tag_entry_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+    tag_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -285,7 +285,7 @@ class MarketClassificationResult(Base):
     result_details: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     classified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     market: Mapped["Market"] = relationship(back_populates="classification_results")
@@ -332,7 +332,7 @@ class MarketTagAssignment(Base):
     confidence: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     assignment_entry_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     classification_result: Mapped["MarketClassificationResult"] = relationship(back_populates="assignments")
@@ -366,7 +366,7 @@ class MarketTagExplanation(Base):
     confidence_delta: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     explanation_payload: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     classification_result: Mapped["MarketClassificationResult"] = relationship(back_populates="explanations")
@@ -431,7 +431,7 @@ class MarketScoringResult(Base):
     scoring_details: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
     scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
     market: Mapped["Market"] = relationship(back_populates="scoring_results")
@@ -473,7 +473,7 @@ class RejectionReasonStats(Base):
     stat_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
 
@@ -516,7 +516,7 @@ class ListVersion(Base):
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
 
@@ -540,7 +540,7 @@ class TagQualityMetric(Base):
     category_distribution: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
     bucket_distribution: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
 
@@ -562,7 +562,7 @@ class TagQualityAnomaly(Base):
     is_resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
 
 
@@ -584,5 +584,5 @@ class M2Report(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     generated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )

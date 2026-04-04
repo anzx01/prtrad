@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 interface TagDefinition {
-  tag_key: string;
+  tag_code: string;
   tag_name: string;
   description: string | null;
   is_active: boolean;
@@ -128,11 +128,11 @@ export default function TaggingPage() {
                 )}
                 {definitions.map((def) => (
                   <tr
-                    key={def.tag_key}
+                    key={def.tag_code}
                     className="border-b border-white/5 hover:bg-white/5 transition-colors"
                   >
                     <td className="px-4 py-3 font-mono text-xs text-sky-300">
-                      {def.tag_key}
+                      {def.tag_code}
                     </td>
                     <td className="px-4 py-3 text-slate-100">{def.tag_name}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-slate-400 text-xs">

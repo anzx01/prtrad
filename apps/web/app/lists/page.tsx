@@ -7,7 +7,7 @@ export default function ListsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/lists/entries`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/lists/entries`)
       .then((res) => res.json())
       .then((data) => {
         setEntries(data.entries || [])

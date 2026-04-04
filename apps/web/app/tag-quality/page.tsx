@@ -7,7 +7,7 @@ export default function TagQualityPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tag-quality/metrics`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/tag-quality/metrics`)
       .then((res) => res.json())
       .then((data) => {
         setMetrics(data.metrics || [])

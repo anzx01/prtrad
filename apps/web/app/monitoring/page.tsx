@@ -7,7 +7,7 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/monitoring/metrics`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/monitoring/metrics`)
       .then((res) => res.json())
       .then((data) => {
         setMetrics(data.metrics || {})

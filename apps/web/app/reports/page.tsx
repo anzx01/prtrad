@@ -7,7 +7,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/reports`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/reports`)
       .then((res) => res.json())
       .then((data) => {
         setReports(data.reports || [])

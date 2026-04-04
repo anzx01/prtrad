@@ -12,7 +12,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -155,11 +155,13 @@ class ReviewService:
             query = query.where(MarketReviewTask.assigned_to == assigned_to)
 
         # 按优先级和创建时间排序
-        priority_order = {"urgent": 1, "high": 2, "normal": 3, "low": 4}
-        query = query.order_by(
-            MarketReviewTask.priority.case(priority_order, else_=5),
-            MarketReviewTask.created_at.asc(),
+        from sqlalchemy import case
+        priority_order = case(
+            {"urgent": 1, "high": 2, "normal": 3, "low": 4},
+            value=MarketReviewTask.priority,
+            else_=5,
         )
+        query = query.order_by(priority_order, MarketReviewTask.created_at.asc())
 
         query = query.limit(limit).offset(offset)
 

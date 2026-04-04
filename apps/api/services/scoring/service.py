@@ -470,8 +470,8 @@ class ScoringService:
 
             except Exception as e:
                 stats["errors"] += 1
-                # 记录错误但继续处理其他结果
-                print(f"Error scoring market {result.market_ref_id}: {e}")
+                self.db.rollback()
+                print(f"Error scoring market: {e}")
 
         return stats
 

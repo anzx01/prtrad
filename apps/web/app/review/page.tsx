@@ -8,7 +8,7 @@ export default function ReviewPage() {
   const [statusFilter, setStatusFilter] = useState("pending")
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/review/queue?queue_status=${statusFilter}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/review/queue?queue_status=${statusFilter}`)
       .then((res) => res.json())
       .then((data) => {
         setTasks(data.tasks || [])
