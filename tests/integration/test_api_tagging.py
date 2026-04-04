@@ -72,9 +72,9 @@ def mock_tagging_service(monkeypatch):
         "rules": [],
     }
 
-    # Patch the service getter
-    from services import tagging as tagging_module
-    monkeypatch.setattr(tagging_module, "get_tagging_rule_service", lambda: mock_service)
+    # Patch the service getter in the routes module
+    from app.routes import tagging as tagging_routes
+    monkeypatch.setattr(tagging_routes, "get_tagging_rule_service", lambda: mock_service)
 
     return mock_service
 

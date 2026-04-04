@@ -97,13 +97,9 @@ def get_market_detail(
     session: Session = Depends(get_db),
 ) -> MarketDetailResponse:
     """Get market detail with latest snapshot and DQ result."""
-    # Load market with relationships
+    # Load market
     market = session.scalar(
         select(Market)
-        .options(
-            selectinload(Market.snapshots).limit(1),
-            selectinload(Market.dq_results).limit(1),
-        )
         .where(Market.market_id == market_id)
     )
 

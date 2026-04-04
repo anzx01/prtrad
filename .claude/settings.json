@@ -22,7 +22,30 @@
       "Bash(python -m pytest tests/integration/test_api_markets.py -v --tb=line)",
       "Bash(python -m pytest tests/test_*.py -v)",
       "Bash(netstat -ano)",
-      "Bash(findstr :8000)"
+      "Bash(findstr :8000)",
+      "Bash(alembic current:*)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py::test_get_market_detail -v)",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py::test_list_tag_definitions -v)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py::test_get_market_detail tests/integration/test_api_markets.py::test_get_market_detail_not_found -v)",
+      "Bash(sqlite3 g:/myaist/prtrad/apps/api/var/data/ptr_dev.sqlite3 \".tables\")",
+      "Bash(python -c \"import sqlite3; conn = sqlite3.connect\\('g:/myaist/prtrad/apps/api/var/data/ptr_dev.sqlite3'\\); cursor = conn.cursor\\(\\); cursor.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%tag%'\\\\\"\\); print\\('\\\\n'.join\\([row[0] for row in cursor.fetchall\\(\\)]\\)\\)\")",
+      "Bash(python -c \"import sqlite3; conn = sqlite3.connect\\('g:/myaist/prtrad/tests/integration/test.db'\\); cursor = conn.cursor\\(\\); cursor.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%tag%'\\\\\"\\); print\\('\\\\n'.join\\([row[0] for row in cursor.fetchall\\(\\)]\\)\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, 'g:/myaist/prtrad/apps/api'\\); from db import models; from db.base import Base; print\\('Tables:', [t.name for t in Base.metadata.tables.values\\(\\)]\\)\")",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py::test_list_tag_definitions -v --tb=short)",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py -v)",
+      "Bash(timeout 30 python -m pytest tests/integration/test_api_tagging.py::test_get_tag_dictionary -v -s)",
+      "Bash(timeout 30 python -m pytest tests/integration/test_api_tagging.py -k \"dictionary\" -v -s)",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py -v --tb=short)",
+      "Bash(python -m pytest tests/integration/ -v --tb=no)",
+      "Bash(python -m pytest tests/integration/test_api_markets.py tests/integration/test_api_tagging.py -v --tb=no)",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py::test_list_tag_definitions -v -s)",
+      "Bash(python -m pytest tests/integration/test_api_tagging.py -v --tb=no)",
+      "Bash(python -m pytest tests/integration/ --tb=no -q)",
+      "Bash(python -m pytest tests/integration/test_api_dq.py -v --tb=short)",
+      "Bash(python -m pytest tests/integration/test_api_dq.py::test_get_dq_summary_empty -v -s)",
+      "Bash(python -m pytest tests/integration/test_api_dq.py::test_get_dq_summary_empty -v --tb=line)",
+      "Bash(python -m pytest tests/integration/test_api_dq.py -v --tb=line)",
+      "Bash(python -m pytest tests/integration/ -q --tb=no)"
     ]
   }
 }

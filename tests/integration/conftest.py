@@ -68,12 +68,21 @@ class MockAuditLogService:
 @pytest.fixture(scope="function", autouse=True)
 def setup_test_database():
     """Create all tables in the test database before each test."""
+    # Close any existing connections first
+    test_engine.dispose()
+
     # Remove old test database if exists
     if test_db_path.exists():
         try:
             test_db_path.unlink()
-        except PermissionError:
-            pass  # File is locked, will be overwritten
+        except (PermissionError, OSError):
+            # If file is locked, wait a bit and try again
+            import time
+            time.sleep(0.1)
+            try:
+                test_db_path.unlink()
+            except (PermissionError, OSError):
+                pass  # File is locked, will be overwritten
 
     # Create all tables
     Base.metadata.create_all(test_engine)
@@ -86,7 +95,7 @@ def setup_test_database():
     if test_db_path.exists():
         try:
             test_db_path.unlink()
-        except PermissionError:
+        except (PermissionError, OSError):
             pass  # File is locked, will be cleaned up later
 
 
