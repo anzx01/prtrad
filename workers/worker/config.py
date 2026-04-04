@@ -50,6 +50,11 @@ class WorkerSettings:
     tagging_market_limit = _get_int("TAGGING_MARKET_LIMIT", 200)
     scoring_run_interval_seconds = _get_int("SCORING_RUN_INTERVAL_SECONDS", 180)
     scoring_market_limit = _get_int("SCORING_MARKET_LIMIT", 200)
+    review_task_generation_interval_seconds = _get_int("REVIEW_TASK_GENERATION_INTERVAL_SECONDS", 300)
+    review_task_market_limit = _get_int("REVIEW_TASK_MARKET_LIMIT", 200)
+    tag_quality_run_interval_seconds = _get_int("TAG_QUALITY_RUN_INTERVAL_SECONDS", 21600)
+    monitoring_metrics_interval_seconds = _get_int("MONITORING_METRICS_INTERVAL_SECONDS", 300)
+    reports_generation_interval_seconds = _get_int("REPORTS_GENERATION_INTERVAL_SECONDS", 604800)
 
 
 settings = WorkerSettings()

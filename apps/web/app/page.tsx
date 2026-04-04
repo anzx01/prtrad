@@ -19,6 +19,36 @@ const navCards = [
     href: "/tagging",
     cta: "View Tagging",
   },
+  {
+    title: "Review Queue",
+    body: "Manage review tasks for markets requiring manual approval or rejection decisions.",
+    href: "/review",
+    cta: "View Review Queue",
+  },
+  {
+    title: "List Management",
+    body: "Configure whitelist, graylist, and blacklist entries for market filtering and classification.",
+    href: "/lists",
+    cta: "Manage Lists",
+  },
+  {
+    title: "Monitoring",
+    body: "Track system health, task execution metrics, and alert status across all services.",
+    href: "/monitoring",
+    cta: "View Monitoring",
+  },
+  {
+    title: "Tag Quality",
+    body: "Monitor classification quality metrics, anomaly detection, and distribution trends.",
+    href: "/tag-quality",
+    cta: "View Quality Metrics",
+  },
+  {
+    title: "Reports",
+    body: "Generate and view M2 milestone reports with approval rates, rejection codes, and SLA metrics.",
+    href: "/reports",
+    cta: "View Reports",
+  },
 ];
 
 export default function HomePage() {
@@ -34,7 +64,7 @@ export default function HomePage() {
         </p>
       </header>
 
-      <section className="grid gap-5 md:grid-cols-3">
+      <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {navCards.map((card) => (
           <article
             key={card.title}

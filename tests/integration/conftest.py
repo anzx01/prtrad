@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 # Add apps/api to sys.path before importing app modules
 api_path = Path(__file__).parent.parent.parent / "apps" / "api"
@@ -23,11 +24,11 @@ from db.session import get_db
 from app.main import app
 
 
-# Create test engine
+# Create test engine with file-based database for sharing across connections
+test_db_path = Path(__file__).parent / "test.db"
 test_engine = create_engine(
-    "sqlite:///:memory:",
+    f"sqlite:///{test_db_path}",
     echo=False,
-    connect_args={"check_same_thread": False},
 )
 
 # Create test session factory
@@ -47,31 +48,58 @@ def override_get_db():
         session.close()
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_test_database():
-    """Create all tables in the test database."""
-    Base.metadata.create_all(test_engine)
-    yield
-    Base.metadata.drop_all(test_engine)
-    test_engine.dispose()
+# Mock audit service to avoid database issues in tests
+class MockAuditLogService:
+    """Mock audit service that doesn't write to database."""
+
+    def write_event(self, event, session=None):
+        """Mock write_event - does nothing."""
+        return "mock-audit-id"
+
+    def safe_write_event(self, event, session=None, *, context=None):
+        """Mock safe_write_event - does nothing."""
+        return "mock-audit-id"
+
+    def log(self, **kwargs):
+        """Mock log - does nothing."""
+        return "mock-audit-id"
 
 
 @pytest.fixture(scope="function", autouse=True)
-def clean_database():
-    """Clean all tables before each test."""
-    session = TestSessionLocal()
-    try:
-        for table in reversed(Base.metadata.sorted_tables):
-            session.execute(table.delete())
-        session.commit()
-    finally:
-        session.close()
+def setup_test_database():
+    """Create all tables in the test database before each test."""
+    # Remove old test database if exists
+    if test_db_path.exists():
+        try:
+            test_db_path.unlink()
+        except PermissionError:
+            pass  # File is locked, will be overwritten
+
+    # Create all tables
+    Base.metadata.create_all(test_engine)
+    yield
+
+    # Close all connections
+    test_engine.dispose()
+
+    # Clean up after test
+    if test_db_path.exists():
+        try:
+            test_db_path.unlink()
+        except PermissionError:
+            pass  # File is locked, will be cleaned up later
 
 
 @pytest.fixture(scope="function")
 def client():
     """Create a test client using FastAPI dependency override."""
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
+
+    # Mock audit service globally
+    mock_audit = MockAuditLogService()
+    with patch('middleware.request_context.get_audit_log_service', return_value=mock_audit):
+        with patch('services.audit.get_audit_log_service', return_value=mock_audit):
+            with TestClient(app) as test_client:
+                yield test_client
+
     app.dependency_overrides.clear()

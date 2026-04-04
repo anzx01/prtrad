@@ -1,10 +1,11 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_utils import bind_log_context, configure_logging
-from app.routes import dq, markets, tagging
+from app.routes import dq, lists, markets, monitoring, reason_codes, reports, review, tag_quality, tagging
 from middleware import request_context_middleware
 
 settings = get_settings()
@@ -17,12 +18,27 @@ configure_logging(
 app = FastAPI(title="Polymarket Tail Risk API", version="0.1.0")
 logger = logging.getLogger("ptr.api")
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.middleware("http")(request_context_middleware)
 
 # Register routers
 app.include_router(markets.router)
 app.include_router(tagging.router)
 app.include_router(dq.router)
+app.include_router(review.router)
+app.include_router(reason_codes.router)
+app.include_router(lists.router)
+app.include_router(monitoring.router)
+app.include_router(tag_quality.router)
+app.include_router(reports.router)
 
 
 @app.get("/health")

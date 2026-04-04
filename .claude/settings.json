@@ -20,7 +20,9 @@
       "Bash(python -m pytest tests/integration/test_api_markets.py::test_list_markets_empty -xvs)",
       "Bash(python -c \"import os; os.environ['DATABASE_URL']='sqlite:///:memory:'; os.environ['APP_ENV']='test'; import sys; sys.path.insert\\(0, 'apps/api'\\); from sqlalchemy import create_engine; from sqlalchemy.orm import sessionmaker; from db.base import Base; from db import models; engine = create_engine\\('sqlite:///:memory:', echo=False, connect_args={'check_same_thread': False}\\); Base.metadata.create_all\\(engine\\); print\\('Tables created:', list\\(Base.metadata.tables.keys\\(\\)\\)\\); SessionLocal = sessionmaker\\(bind=engine\\); s = SessionLocal\\(\\); from sqlalchemy import inspect; insp = inspect\\(engine\\); print\\('Tables in DB:', insp.get_table_names\\(\\)\\); s.close\\(\\)\")",
       "Bash(python -m pytest tests/integration/test_api_markets.py -v --tb=line)",
-      "Bash(python -m pytest tests/test_*.py -v)"
+      "Bash(python -m pytest tests/test_*.py -v)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)"
     ]
   }
 }

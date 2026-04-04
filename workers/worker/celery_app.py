@@ -17,7 +17,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    imports=("worker.tasks.system", "worker.tasks.ingest", "worker.tasks.dq", "worker.tasks.tagging", "worker.tasks.scoring"),
+    imports=("worker.tasks.system", "worker.tasks.ingest", "worker.tasks.dq", "worker.tasks.tagging", "worker.tasks.scoring", "worker.tasks.review", "worker.tasks.tag_quality", "worker.tasks.monitoring", "worker.tasks.reports"),
     task_default_queue="default",
     worker_hijack_root_logger=False,
     task_track_started=True,
@@ -59,6 +59,16 @@ celery_app.conf.update(
                 }
             }
             if settings.scoring_run_interval_seconds > 0
+            else {}
+        ),
+        **(
+            {
+                "dispatch-review-task-generation": {
+                    "task": "review.generate_review_tasks",
+                    "schedule": timedelta(seconds=settings.review_task_generation_interval_seconds),
+                }
+            }
+            if settings.review_task_generation_interval_seconds > 0
             else {}
         ),
     },

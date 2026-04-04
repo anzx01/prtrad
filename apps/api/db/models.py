@@ -183,7 +183,7 @@ class TagDictionaryEntry(TimestampMixin, Base):
     dimension: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     aliases: Mapped[list | None] = mapped_column(json_type(), nullable=True)
-    tag_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+    tag_entry_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -330,7 +330,7 @@ class MarketTagAssignment(Base):
     tag_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     assignment_role: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     confidence: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
-    assignment_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+    assignment_entry_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -426,8 +426,8 @@ class MarketScoringResult(Base):
     clarity_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     resolution_objectivity_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
     overall_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
-    admission_recommendation: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    rejection_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    admission_recommendation: Mapped[str] = mapped_column(String(32), nullable=False)
+    rejection_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scoring_details: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
     scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -437,4 +437,152 @@ class MarketScoringResult(Base):
     market: Mapped["Market"] = relationship(back_populates="scoring_results")
     classification_result: Mapped["MarketClassificationResult | None"] = relationship(
         back_populates="scoring_results"
+    )
+
+
+class RejectionReasonCode(TimestampMixin, Base):
+    """拒绝原因码字典表"""
+
+    __tablename__ = "rejection_reason_codes"
+    __table_args__ = (
+        Index("ix_rejection_reason_codes_category", "reason_category"),
+        Index("ix_rejection_reason_codes_active", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    reason_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    reason_category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+
+
+class RejectionReasonStats(Base):
+    """拒绝原因码统计表"""
+
+    __tablename__ = "rejection_reason_stats"
+    __table_args__ = (
+        UniqueConstraint("reason_code", "stat_date", name="uq_rejection_reason_stats_code_date"),
+        Index("ix_rejection_reason_stats_date", "stat_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    stat_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ListEntry(TimestampMixin, Base):
+    """名单条目表（白/灰/黑名单）"""
+
+    __tablename__ = "list_entries"
+    __table_args__ = (
+        Index("ix_list_entries_type_active", "list_type", "is_active"),
+        Index("ix_list_entries_entry_type", "entry_type"),
+        Index("ix_list_entries_expires_at", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    list_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    entry_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    entry_value: Mapped[str] = mapped_column(Text, nullable=False)
+    match_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="exact")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    added_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    entry_metadata: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+
+
+class ListVersion(Base):
+    """名单版本管理表"""
+
+    __tablename__ = "list_versions"
+    __table_args__ = (
+        Index("ix_list_versions_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    version_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    change_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot_payload: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class TagQualityMetric(Base):
+    """标签质量指标表"""
+
+    __tablename__ = "tag_quality_metrics"
+    __table_args__ = (
+        UniqueConstraint("metric_date", "rule_version", name="uq_tag_quality_metrics_date_version"),
+        Index("ix_tag_quality_metrics_date", "metric_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    metric_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rule_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    total_classifications: Mapped[int] = mapped_column(Integer, nullable=False)
+    success_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    conflict_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    avg_confidence: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
+    category_distribution: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    bucket_distribution: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class TagQualityAnomaly(Base):
+    """标签质量异常记录表"""
+
+    __tablename__ = "tag_quality_anomalies"
+    __table_args__ = (
+        Index("ix_tag_quality_anomalies_type_severity", "anomaly_type", "severity"),
+        Index("ix_tag_quality_anomalies_detected_at", "detected_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    anomaly_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rule_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    anomaly_details: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class M2Report(Base):
+    """M2 阶段评审报告表"""
+
+    __tablename__ = "m2_reports"
+    __table_args__ = (
+        UniqueConstraint("report_type", "report_period_start", "report_period_end",
+                        name="uq_m2_reports_type_period"),
+        Index("ix_m2_reports_type_period", "report_type", "report_period_end"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    report_period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    report_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    report_data: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    generated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
