@@ -12,7 +12,22 @@
       "Bash(powershell -Command \"Remove-Item -Path '.\\\\.next' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Cleaned .next directory'\")",
       "Bash(curl -s http://127.0.0.1:3000/review)",
       "Bash(curl -s http://127.0.0.1:3001/review)",
-      "Bash(curl -s http://127.0.0.1:3002/review)"
+      "Bash(curl -s http://127.0.0.1:3002/review)",
+      "Bash(curl -s http://127.0.0.1:3002)",
+      "Bash(curl -I http://127.0.0.1:3002)",
+      "Bash(findstr \":3000 \\\\|:3001 \\\\|:3002 \\\\|:8000 \")",
+      "Bash(findstr LISTEN)",
+      "Bash(findstr \":8000 \")",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s http://localhost:3000/_next/static/chunks/app/review/page.js)",
+      "Bash(taskkill /PID 14432 /F)",
+      "Bash(powershell -Command \"Remove-Item -Path '.\\\\.next' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'done'\")",
+      "Bash(findstr \":3000 \")",
+      "Bash(tasklist /PID 14432)",
+      "Bash(powershell -Command \"Get-Process -Id 14432 | Select-Object Name, Id, CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 14432 -Force; Write-Host 'Killed 14432'\")",
+      "Bash(curl -s http://localhost:3003)",
+      "Bash(curl -s http://localhost:3003/review)"
     ]
   }
 }
