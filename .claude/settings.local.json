@@ -7,7 +7,12 @@
       "Bash(python -m py_compile apps/api/db/models.py)",
       "Bash(curl -s http://127.0.0.1:8000/review/queue?queue_status=pending)",
       "Bash(ls g:/myaist/prtrad/apps/web/.env*)",
-      "Bash(curl -s http://127.0.0.1:3000)"
+      "Bash(curl -s http://127.0.0.1:3000)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(powershell -Command \"Remove-Item -Path '.\\\\.next' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Cleaned .next directory'\")",
+      "Bash(curl -s http://127.0.0.1:3000/review)",
+      "Bash(curl -s http://127.0.0.1:3001/review)",
+      "Bash(curl -s http://127.0.0.1:3002/review)"
     ]
   }
 }
