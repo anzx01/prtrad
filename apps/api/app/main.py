@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_utils import bind_log_context, configure_logging
-from app.routes import dq, lists, markets, monitoring, reason_codes, reports, review, tag_quality, tagging
+from app.routes import calibration, dq, lists, markets, monitoring, netev, reason_codes, reports, review, tag_quality, tagging
 from middleware import request_context_middleware
 
 settings = get_settings()
@@ -39,6 +39,8 @@ app.include_router(lists.router)
 app.include_router(monitoring.router)
 app.include_router(tag_quality.router)
 app.include_router(reports.router)
+app.include_router(calibration.router)
+app.include_router(netev.router)
 
 
 @app.get("/health")

@@ -211,11 +211,16 @@ def _cumulative_target_depth(levels: list[dict[str, Any]], target_size: Decimal)
 
 
 def _resolve_binary_tokens(outcomes: list[str] | None, token_ids: list[str] | None) -> tuple[str, str] | None:
-    if not outcomes or not token_ids or len(outcomes) != 2 or len(token_ids) != 2:
+    """解析二元市场的 YES/NO token。
+
+    Polymarket 约定：clob_token_ids[0] 对应 YES 方，clob_token_ids[1] 对应 NO 方，
+    与 outcomes 的具体标签名称无关（如 Over/Under、Up/Down、Team A/Team B 等）。
+    """
+    if not token_ids or len(token_ids) != 2:
         return None
-    mapping = {str(label).strip().lower(): token_id for label, token_id in zip(outcomes, token_ids)}
-    yes_token = mapping.get("yes")
-    no_token = mapping.get("no")
+    if not outcomes or len(outcomes) != 2:
+        return None
+    yes_token, no_token = token_ids[0], token_ids[1]
     if yes_token and no_token:
         return yes_token, no_token
     return None
@@ -297,8 +302,6 @@ class PolymarketIngestService:
                         # Clear seen_market_ids periodically to prevent memory growth
                         if len(seen_market_ids) > batch_size:
                             seen_market_ids.clear()
-                        seen_market_ids.add(record.market_id)
-                        records.append(record)
 
                 existing_markets = {
                     market.market_id: market

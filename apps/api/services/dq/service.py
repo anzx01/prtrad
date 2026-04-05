@@ -422,8 +422,8 @@ class MarketDataQualityService:
 
     @staticmethod
     def _check_snapshot_required_fields(snapshot: MarketSnapshot) -> list[DQCheckResult]:
-        missing_fields: list[str] = []
-        for field_name in (
+        # 阻断性必填字段：没有这些字段无法判断盘口状态
+        blocking_fields = (
             "best_bid_no",
             "best_ask_no",
             "best_bid_yes",
@@ -431,24 +431,38 @@ class MarketDataQualityService:
             "spread",
             "top_of_book_depth",
             "cumulative_depth_at_target_size",
-            "traded_volume",
-        ):
-            if getattr(snapshot, field_name) is None:
-                missing_fields.append(field_name)
+        )
+        # 非阻断性可选字段：缺失只产生警告
+        warning_fields = ("traded_volume",)
 
-        if not missing_fields:
-            return []
-        return [
-            DQCheckResult(
-                code="DQ_SNAPSHOT_REQUIRED_FIELDS_MISSING",
-                status="fail",
-                severity="error",
-                message="最新快照缺少关键字段。",
-                blocking=True,
-                reason_code="REJ_DATA_INCOMPLETE",
-                details={"missing_fields": missing_fields},
+        missing_blocking = [f for f in blocking_fields if getattr(snapshot, f) is None]
+        missing_warning = [f for f in warning_fields if getattr(snapshot, f) is None]
+
+        results: list[DQCheckResult] = []
+        if missing_blocking:
+            results.append(
+                DQCheckResult(
+                    code="DQ_SNAPSHOT_REQUIRED_FIELDS_MISSING",
+                    status="fail",
+                    severity="error",
+                    message="最新快照缺少关键字段。",
+                    blocking=True,
+                    reason_code="REJ_DATA_INCOMPLETE",
+                    details={"missing_fields": missing_blocking},
+                )
             )
-        ]
+        if missing_warning:
+            results.append(
+                DQCheckResult(
+                    code="DQ_SNAPSHOT_OPTIONAL_FIELDS_MISSING",
+                    status="warn",
+                    severity="warning",
+                    message="最新快照缺少可选字段，部分分析功能受限。",
+                    blocking=False,
+                    details={"missing_fields": missing_warning},
+                )
+            )
+        return results
 
     def _check_snapshot_staleness(
         self,

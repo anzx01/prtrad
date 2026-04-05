@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import ApiStatus from "./components/ApiStatus";
 
 export const metadata: Metadata = {
   title: "Polymarket Tail Risk",
@@ -37,6 +38,9 @@ export default function RootLayout({
                   {link.label}
                 </Link>
               ))}
+            </div>
+            <div className="ml-auto">
+              <ApiStatus />
             </div>
           </div>
         </nav>

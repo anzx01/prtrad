@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -10,16 +11,20 @@ class PolymarketApiError(RuntimeError):
     pass
 
 
+def _make_transport() -> httpx.HTTPTransport:
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+    if proxy:
+        return httpx.HTTPTransport(retries=3, proxy=proxy)
+    return httpx.HTTPTransport(retries=3)
+
+
 class PolymarketGammaClient:
     def __init__(self, base_url: str, timeout_seconds: int) -> None:
-        # Configure retry transport
-        transport = httpx.HTTPTransport(retries=3)
-
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
             timeout=Timeout(timeout_seconds, connect=5.0),
             headers={"Accept": "application/json"},
-            transport=transport,
+            transport=_make_transport(),
         )
 
     def list_events(
@@ -62,14 +67,11 @@ class PolymarketGammaClient:
 
 class PolymarketClobClient:
     def __init__(self, base_url: str, timeout_seconds: int) -> None:
-        # Configure retry transport
-        transport = httpx.HTTPTransport(retries=3)
-
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
             timeout=Timeout(timeout_seconds, connect=5.0),
             headers={"Accept": "application/json", "Content-Type": "application/json"},
-            transport=transport,
+            transport=_make_transport(),
         )
 
     def get_order_books(self, token_ids: list[str]) -> list[dict[str, Any]]:

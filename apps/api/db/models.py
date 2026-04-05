@@ -62,7 +62,6 @@ class Market(TimestampMixin, Base):
     )
 
 
-
 class MarketSnapshot(Base):
     __tablename__ = "market_snapshots"
     __table_args__ = (
@@ -303,7 +302,6 @@ class MarketClassificationResult(Base):
     scoring_results: Mapped[list["MarketScoringResult"]] = relationship(
         back_populates="classification_result", cascade="all, delete-orphan"
     )
-
 
 
 class MarketTagAssignment(Base):
@@ -586,3 +584,66 @@ class M2Report(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
+
+
+class CalibrationUnit(Base):
+    """M3 校准单元表"""
+
+    __tablename__ = "calibration_units"
+    __table_args__ = (
+        UniqueConstraint(
+            "price_bucket",
+            "category_code",
+            "time_bucket",
+            "liquidity_tier",
+            "window_type",
+            name="uq_calibration_units_key",
+        ),
+        Index("ix_calibration_units_active", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    price_bucket: Mapped[str] = mapped_column(String(32), nullable=False)
+    category_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    time_bucket: Mapped[str] = mapped_column(String(32), nullable=False)
+    liquidity_tier: Mapped[str] = mapped_column(String(32), nullable=False)
+    window_type: Mapped[str] = mapped_column(String(32), nullable=False)  # "long" | "short"
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    edge_estimate: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    interval_low: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    interval_high: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    disabled_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class NetEVCandidate(Base):
+    """M3 NetEV 准入评估记录表"""
+
+    __tablename__ = "netev_candidates"
+    __table_args__ = (Index("ix_netev_candidates_market_decision", "market_ref_id", "admission_decision"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    market_ref_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("markets.id", ondelete="CASCADE"), nullable=False
+    )
+    calibration_unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("calibration_units.id", ondelete="SET NULL"), nullable=True
+    )
+    gross_edge: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    fee_cost: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    slippage_cost: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    dispute_discount: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    net_ev: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    admission_decision: Mapped[str] = mapped_column(String(32), nullable=False)  # "admit" | "reject"
+    rejection_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+    market: Mapped["Market"] = relationship()
+    calibration_unit: Mapped["CalibrationUnit | None"] = relationship()

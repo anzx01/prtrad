@@ -1,4 +1,11 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# 从项目根目录加载 .env（兼容不同工作目录启动）
+_root = Path(__file__).resolve().parents[2]
+load_dotenv(_root / ".env", override=False)
 
 
 def _get_int(name: str, default: int) -> int:
