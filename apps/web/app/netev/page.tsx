@@ -1,31 +1,45 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { apiGet } from "@/lib/api"
 
 export default function NetEVPage() {
   const [candidates, setCandidates] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
 
   useEffect(() => {
-    const url = new URL(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/netev/candidates`)
-    if (filter) {
-      url.searchParams.append("decision", filter)
-    }
-    fetch(url.toString())
-      .then((res) => res.json())
-      .then((data) => {
+    setLoading(true)
+    setError(null)
+
+    const endpoint = filter ? `/netev/candidates?decision=${filter}` : "/netev/candidates"
+
+    apiGet(endpoint)
+      .then((data: any) => {
         setCandidates(data || [])
         setLoading(false)
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error("Failed to fetch NetEV candidates:", err)
+        setError(err.message || "Failed to fetch NetEV candidates")
         setLoading(false)
       })
   }, [filter])
 
   if (loading) {
     return <div className="p-8 text-gray-500">加载中...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <p className="font-semibold">错误</p>
+          <p className="text-sm mt-1">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -124,7 +124,12 @@
       "Bash(python -c \"from sqlalchemy import select; from services.calibration.service import CalibrationService; from services.netev.service import NetEVService; from db.session import SessionLocal; from db.models import Market; import uuid; db = SessionLocal\\(\\); m = db.scalar\\(select\\(Market\\).where\\(Market.market_id == 'test-m3'\\)\\); cs = CalibrationService\\(db\\); unit = cs.compute_calibration\\('AI', '0.5', '7d'\\); ns = NetEVService\\(db\\); ns.evaluate\\(m.id\\); print\\('M3 simulation successful'\\)\")",
       "Bash(python -c \"from db.session import engine; from sqlalchemy import inspect; inspector = inspect\\(engine\\); print\\(inspector.get_table_names\\(\\)\\)\")",
       "Bash(rm var/data/ptr_dev.sqlite3)",
-      "Bash(python -c \"from sqlalchemy import select; from services.calibration.service import CalibrationService; from services.netev.service import NetEVService; from db.session import SessionLocal; from db.models import Market; import uuid; db = SessionLocal\\(\\); m = Market\\(id=uuid.uuid4\\(\\), market_id='test-m3', question='Will GPT-5 launch in 2026?', category_raw='AI'\\); db.add\\(m\\); db.commit\\(\\); cs = CalibrationService\\(db\\); unit = cs.compute_calibration\\('AI', '0.5', '7d'\\); ns = NetEVService\\(db\\); ns.evaluate\\(m.id\\); print\\('M3 simulation successful'\\)\")"
+      "Bash(python -c \"from sqlalchemy import select; from services.calibration.service import CalibrationService; from services.netev.service import NetEVService; from db.session import SessionLocal; from db.models import Market; import uuid; db = SessionLocal\\(\\); m = Market\\(id=uuid.uuid4\\(\\), market_id='test-m3', question='Will GPT-5 launch in 2026?', category_raw='AI'\\); db.add\\(m\\); db.commit\\(\\); cs = CalibrationService\\(db\\); unit = cs.compute_calibration\\('AI', '0.5', '7d'\\); ns = NetEVService\\(db\\); ns.evaluate\\(m.id\\); print\\('M3 simulation successful'\\)\")",
+      "Bash(ls -d g:/myaist/prtrad/scripts/*)",
+      "Bash(taskkill /PID 16524 /F)",
+      "Bash(taskkill /PID 7824 /F)",
+      "Bash(python -m uvicorn app.main:app --reload --app-dir apps/api --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/health)"
     ],
     "additionalDirectories": [
       "g:\\myaist\\prtrad\\apps\\web\\app\\review"

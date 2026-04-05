@@ -4,7 +4,10 @@
       "Bash(python -m alembic upgrade head)",
       "Bash(python -m py_compile apps/api/services/scoring/service.py)",
       "Bash(python -m py_compile workers/worker/tasks/scoring.py)",
-      "Bash(python -m py_compile apps/api/db/models.py)"
+      "Bash(python -m py_compile apps/api/db/models.py)",
+      "Bash(curl -s http://127.0.0.1:8000/review/queue?queue_status=pending)",
+      "Bash(ls g:/myaist/prtrad/apps/web/.env*)",
+      "Bash(curl -s http://127.0.0.1:3000)"
     ]
   }
 }

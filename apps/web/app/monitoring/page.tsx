@@ -1,26 +1,42 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { apiGet } from "@/lib/api"
 
 export default function MonitoringPage() {
   const [metrics, setMetrics] = useState<any>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/monitoring/metrics`)
-      .then((res) => res.json())
-      .then((data) => {
+    setLoading(true)
+    setError(null)
+
+    apiGet("/monitoring/metrics")
+      .then((data: any) => {
         setMetrics(data.metrics || {})
         setLoading(false)
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error("Failed to fetch metrics:", err)
+        setError(err.message || "Failed to fetch metrics")
         setLoading(false)
       })
   }, [])
 
   if (loading) {
-    return <div className="p-8">Loading...</div>
+    return <div className="p-8 text-gray-500">加载中...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <p className="font-semibold">错误</p>
+          <p className="text-sm mt-1">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   const reviewQueue = metrics.review_queue || {}
