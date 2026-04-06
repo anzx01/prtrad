@@ -647,3 +647,88 @@ class NetEVCandidate(Base):
 
     market: Mapped["Market"] = relationship()
     calibration_unit: Mapped["CalibrationUnit | None"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# M4 — 组合风控与状态机
+# ---------------------------------------------------------------------------
+
+
+class RiskStateEvent(Base):
+    """M4 全局风险状态迁移事件"""
+
+    __tablename__ = "risk_state_events"
+    __table_args__ = (Index("ix_risk_state_events_created_at", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    from_state: Mapped[str] = mapped_column(String(32), nullable=False)  # Normal|Caution|RiskOff|Frozen
+    to_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(16), nullable=False)  # "auto" | "manual"
+    trigger_metric: Mapped[str] = mapped_column(String(128), nullable=False)
+    trigger_value: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    threshold_value: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class RiskExposure(Base):
+    """M4 风险暴露快照（按风险簇）"""
+
+    __tablename__ = "risk_exposures"
+    __table_args__ = (Index("ix_risk_exposures_cluster_snapshot", "cluster_code", "snapshot_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cluster_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    gross_exposure: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    net_exposure: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    position_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    limit_value: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    utilization_rate: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    is_breached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class KillSwitchRequest(Base):
+    """M4 kill-switch 审批请求"""
+
+    __tablename__ = "kill_switch_requests"
+    __table_args__ = (Index("ix_kill_switch_requests_status", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_type: Mapped[str] = mapped_column(String(32), nullable=False)  # freeze|risk_off|unfreeze
+    target_scope: Mapped[str] = mapped_column(String(64), nullable=False)  # "global" | cluster_code
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending|approved|rejected
+    reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class RiskThresholdConfig(Base):
+    """M4 风险阈值配置"""
+
+    __tablename__ = "risk_threshold_configs"
+    __table_args__ = (
+        UniqueConstraint("cluster_code", "metric_name", name="uq_risk_threshold_cluster_metric"),
+        Index("ix_risk_threshold_configs_active", "is_active"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_code: Mapped[str] = mapped_column(String(64), nullable=False)  # "global" 或具体簇
+    metric_name: Mapped[str] = mapped_column(String(64), nullable=False)   # utilization_caution|utilization_risk_off|max_positions
+    threshold_value: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )

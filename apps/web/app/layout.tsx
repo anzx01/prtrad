@@ -13,6 +13,14 @@ const navLinks = [
   { href: "/markets", label: "Markets" },
   { href: "/dq", label: "Data Quality" },
   { href: "/tagging", label: "Tagging" },
+  { href: "/review", label: "Review" },
+  { href: "/lists", label: "Lists" },
+  { href: "/monitoring", label: "Monitoring" },
+  { href: "/tag-quality", label: "Tag Quality" },
+  { href: "/reports", label: "Reports" },
+  { href: "/calibration", label: "Calibration" },
+  { href: "/netev", label: "NetEV" },
+  { href: "/risk", label: "Risk" },
 ];
 
 export default function RootLayout({
@@ -28,12 +36,12 @@ export default function RootLayout({
             <span className="text-sm font-semibold tracking-wide text-white">
               PRT Console
             </span>
-            <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-sm text-slate-300 hover:text-white transition-colors"
+                  className="text-xs text-slate-300 hover:text-white transition-colors"
                 >
                   {link.label}
                 </Link>

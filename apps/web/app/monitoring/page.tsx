@@ -14,7 +14,8 @@ export default function MonitoringPage() {
 
     apiGet("/monitoring/metrics")
       .then((data: any) => {
-        setMetrics(data.metrics || {})
+        // API returns { metrics: { status, metrics: { ... } } }
+        setMetrics(data.metrics?.metrics || data.metrics || {})
         setLoading(false)
       })
       .catch((err: any) => {

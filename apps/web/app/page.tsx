@@ -49,6 +49,24 @@ const navCards = [
     href: "/reports",
     cta: "View Reports",
   },
+  {
+    title: "Calibration",
+    body: "View probability calibration units by price bucket, category, and time window. Manage active trading units.",
+    href: "/calibration",
+    cta: "View Calibration",
+  },
+  {
+    title: "NetEV Admission",
+    body: "Review net expected value admission decisions with cost breakdown: fee, slippage, and dispute discount.",
+    href: "/netev",
+    cta: "View NetEV",
+  },
+  {
+    title: "Portfolio Risk",
+    body: "Monitor risk cluster exposures, global risk state (Normal/Caution/RiskOff/Frozen), and kill-switch approvals.",
+    href: "/risk",
+    cta: "View Risk",
+  },
 ];
 
 export default function HomePage() {

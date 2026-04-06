@@ -18,5 +18,6 @@ def get_metrics(
 ) -> MetricsResponse:
     """Get monitoring metrics."""
     service = MonitoringService(db=session)
-    metrics = service.get_metrics()
-    return MetricsResponse(metrics=metrics)
+    result = service.get_metrics()
+    # service returns { status, metrics: {...} }, unwrap to flat structure
+    return MetricsResponse(metrics=result.get("metrics", result))
