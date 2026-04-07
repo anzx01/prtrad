@@ -1,13 +1,15 @@
 from __future__ import annotations
+
 import uuid
-from typing import List, Optional
 from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from db.session import get_db
 from services.calibration.service import CalibrationService
+from services.m3_helpers import utc_now
 
 
 router = APIRouter(prefix="/calibration", tags=["calibration"])
@@ -25,7 +27,7 @@ class CalibrationUnitSchema(BaseModel):
     interval_low: float
     interval_high: float
     is_active: bool
-    disabled_reason: Optional[str] = None
+    disabled_reason: str | None = None
     computed_at: datetime
 
     class Config:
@@ -40,24 +42,50 @@ class CalibrationComputeRequest(BaseModel):
     window_type: str = "long"
 
 
-@router.get("/units", response_model=List[CalibrationUnitSchema])
-def list_units(session: Session = Depends(get_db)):
-    """获取所有活跃的校准单元"""
+class CalibrationRecomputeResponse(BaseModel):
+    window_type: str
+    computed_at: datetime
+    total_units: int
+    active_units: int
+    inactive_units: int
+
+
+@router.get("/units", response_model=list[CalibrationUnitSchema])
+def list_units(
+    include_inactive: bool = Query(False, description="Whether to include inactive calibration units"),
+    session: Session = Depends(get_db),
+):
     service = CalibrationService(session)
-    return service.list_active_units()
+    return service.list_units(include_inactive=include_inactive)
 
 
 @router.post("/compute", response_model=CalibrationUnitSchema)
 def compute_unit(
     request: CalibrationComputeRequest,
-    session: Session = Depends(get_db)
+    session: Session = Depends(get_db),
 ):
-    """手动触发或更新校准计算"""
     service = CalibrationService(session)
     return service.compute_calibration(
         category_code=request.category_code,
         price_bucket=request.price_bucket,
         time_bucket=request.time_bucket,
         liquidity_tier=request.liquidity_tier,
-        window_type=request.window_type
+        window_type=request.window_type,
+    )
+
+
+@router.post("/recompute-all", response_model=CalibrationRecomputeResponse)
+def recompute_all_units(
+    window_type: str = Query("long", pattern="^(short|long)$"),
+    session: Session = Depends(get_db),
+):
+    service = CalibrationService(session)
+    units = service.recompute_all(window_type=window_type)
+    active_units = sum(1 for unit in units if unit.is_active)
+    return CalibrationRecomputeResponse(
+        window_type=window_type,
+        computed_at=utc_now(),
+        total_units=len(units),
+        active_units=active_units,
+        inactive_units=len(units) - active_units,
     )

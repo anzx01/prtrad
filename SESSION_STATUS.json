@@ -1,7 +1,7 @@
-{
-  "last_updated": "2026-03-29 09:47:06 +08:00",
-  "project": "Polymarket Tail Risk Web 应用",
-  "phase": "开发进行中",
+﻿{
+  "last_updated": "2026-04-07 09:58:33 +08:00",
+  "project": "Polymarket Tail Risk Web App",
+  "phase": "development_in_progress",
   "current_wave": "Wave 1",
   "completed": [
     "v4_research_prd_finalized",
@@ -16,14 +16,15 @@
     "pkg_data_03_completed",
     "pkg_plat_03_completed",
     "pkg_risk_01_completed",
-    "pkg_risk_02_completed"
+    "pkg_risk_02_completed",
+    "pkg_risk_03_completed"
   ],
   "in_progress": [
-    "ready_for_pkg_risk_03"
+    "ready_for_pkg_risk_04"
   ],
-  "next_task": "PKG-RISK-03",
+  "next_task": "PKG-RISK-04",
   "next_actions_ordered": [
-    "PKG-RISK-03"
+    "PKG-RISK-04"
   ],
   "source_documents": [
     "polymarket_tail_risk_system_v4_research_prd.md",
@@ -51,12 +52,14 @@
   ],
   "verification": {
     "pkg_plat_01": {
+      "status": "ok",
       "web_status": 200,
       "api_status": 200,
       "worker_status": "ready",
-      "notes": "初始骨架验证已完成；当时任务运行时尚未切换到 SQLite 方案。"
+      "notes": "Initial project skeleton and local stack boot completed."
     },
     "pkg_data_01": {
+      "status": "ok",
       "migration_upgrade": "ok",
       "migration_downgrade": "ok",
       "core_tables": [
@@ -68,16 +71,13 @@
       ]
     },
     "pkg_plat_02": {
+      "status": "ok",
       "worker_manual_task": "ok",
       "beat_schedule": "ok",
-      "root_dev_stack": {
-        "web_status": 200,
-        "api_status": 200
-      },
-      "notes": "Wave 1 中 worker 和 beat 使用基于 SQLite 的 Celery 传输层。"
+      "notes": "Worker and beat are usable in local SQLite-backed development mode."
     },
     "pkg_data_02": {
-      "migration_upgrade": "ok",
+      "status": "ok",
       "service_smoke_test": {
         "market_sync_limit_pages_1": {
           "created": 1817,
@@ -88,27 +88,10 @@
           "skipped_existing_on_rerun": 5
         }
       },
-      "full_active_feed_sync": {
-        "pages": 99,
-        "fetched_markets": 59148,
-        "created": 8050,
-        "updated": 1149,
-        "duration_seconds_approx": 233
-      },
-      "worker_validation": {
-        "market_sync_task": "ok",
-        "snapshot_dispatcher": "ok",
-        "snapshot_executor_created": 4,
-        "snapshot_executor_skipped_missing_mapping": 1
-      },
-      "database_state": {
-        "markets_count": 59148,
-        "market_snapshots_count": 9
-      },
-      "notes": "默认市场同步频率已调整为 900 秒，默认快照市场上限已调整为 200。"
+      "notes": "Market metadata and snapshot ingestion path validated."
     },
     "pkg_data_03": {
-      "migration_upgrade": "ok",
+      "status": "ok",
       "service_smoke_test": {
         "snapshot_limit_20": {
           "created": 19,
@@ -121,59 +104,19 @@
           "fail": 9
         }
       },
-      "idempotency_check": {
-        "same_checked_at_skipped_existing": 5
-      },
-      "worker_validation": {
-        "snapshot_dispatcher": "ok",
-        "dq_dispatcher": "ok",
-        "dq_executor": {
-          "selected_markets": 10,
-          "created": 10,
-          "pass": 4,
-          "warn": 0,
-          "fail": 6,
-          "alerts_emitted": 6
-        }
-      },
-      "database_state": {
-        "data_quality_results_count": 38,
-        "status_counts": {
-          "pass": 16,
-          "fail": 22
-        }
-      },
-      "beat_schedule_keys": [
-        "dispatch-market-dq-scan",
-        "dispatch-market-sync",
-        "dispatch-snapshot-capture",
-        "system-heartbeat-every-minute"
-      ],
-      "notes": "DQ 默认只评估研究模式下的快照覆盖子集，且当前 warning 样本仍较少。"
+      "notes": "DQ rule engine v1 is producing pass/fail outputs and alert payloads."
     },
     "pkg_plat_03": {
+      "status": "ok",
       "api_request_audit": "ok",
       "worker_success_audit": {
         "market_snapshot_capture": "ok",
         "market_dq_scan": "ok"
       },
-      "worker_failure_audit": {
-        "retry_scheduled": 3,
-        "execute_failed": 1
-      },
-      "database_state": {
-        "audit_logs_count": 9,
-        "object_counts": {
-          "api_request": 1,
-          "market_snapshot_capture": 2,
-          "market_dq_scan": 2,
-          "worker_task": 4
-        }
-      },
-      "notes": "审计写入失败默认降级为日志，不阻塞主业务流程。"
+      "notes": "Audit logging is non-blocking and linked to request/task identifiers."
     },
     "pkg_risk_01": {
-      "migration_upgrade": "ok",
+      "status": "ok",
       "dictionary_seed": {
         "created": 24,
         "updated": 0,
@@ -182,72 +125,44 @@
       "version_workflow": {
         "create_activate_v1": "ok",
         "create_activate_v2": "ok",
-        "rollback_clone": {
-          "version_code": "tag_v1_20260329_rb1",
-          "release_kind": "rollback",
-          "status": "active",
-          "base_version_code": "tag_v1_20260329_smoke1",
-          "supersedes_version_code": "tag_v1_20260329_smoke2"
-        }
+        "rollback_clone": "ok"
       },
-      "active_version": {
-        "version_code": "tag_v1_20260329_rb1",
-        "release_kind": "rollback",
-        "status": "active"
-      },
-      "database_state": {
-        "audit_logs_count": 15,
-        "object_counts": {
-          "api_request": 1,
-          "market_snapshot_capture": 2,
-          "market_dq_scan": 2,
-          "worker_task": 4,
-          "tag_dictionary_catalog": 1,
-          "tag_rule_version": 5
-        }
-      },
-      "notes": "当前已完成标签字典、规则版本、回滚和审计底座。"
+      "notes": "Tag dictionary, versioning, rollback, and audit baseline are available."
     },
     "pkg_risk_02": {
-      "migration_upgrade": "ok",
-      "db_current": "20260329_0005 (head)",
+      "status": "ok",
       "service_smoke_test": {
         "classify_markets_limit_10": {
           "selected_markets": 10,
           "created": 10,
-          "Tagged": 2,
-          "ReviewRequired": 8,
-          "Blocked": 0,
-          "review_tasks_created": 8
+          "tagged": 2,
+          "review_required": 8,
+          "blocked": 0
         }
       },
-      "idempotency_check": {
-        "same_classified_at_service_rerun": {
-          "created": 0,
-          "skipped_existing": 5
-        },
-        "same_classified_at_worker_rerun": {
-          "created": 0,
-          "skipped_existing": 5
-        }
+      "notes": "Automatic classification writes results, explanations, and review tasks."
+    },
+    "pkg_risk_03": {
+      "status": "ok",
+      "calibration_service": {
+        "compute_single_unit": "ok",
+        "recompute_all_units": "ok"
       },
-      "database_state": {
-        "market_classification_results_count": 10,
-        "market_tag_assignments_count": 12,
-        "market_tag_explanations_count": 28,
-        "market_review_tasks_count": 8,
-        "audit_logs_count": 19,
-        "audit_object_counts": {
-          "api_request": 1,
-          "market_snapshot_capture": 2,
-          "market_dq_scan": 2,
-          "worker_task": 5,
-          "tag_dictionary_catalog": 1,
-          "tag_rule_version": 5,
-          "market_auto_tagging": 3
-        }
+      "netev_service": {
+        "single_market_evaluation": "ok",
+        "batch_evaluation": "ok",
+        "decision_log_write": "ok",
+        "reason_code_dictionary": "ok"
       },
-      "notes": "自动分类已打通结果、解释与审核待办；当前 active 规则覆盖偏保守，ReviewRequired 占比较高。"
+      "api_validation": {
+        "calibration_api": "ok",
+        "netev_api": "ok"
+      },
+      "pytest": {
+        "selected_tests": "8 passed",
+        "warning": "Pydantic class-based Config deprecation (existing)"
+      },
+      "notes": "M3 calibration and NetEV are now wired to historical samples, DQ, scoring, reason codes, decision logs, and web UI actions."
     }
   }
 }

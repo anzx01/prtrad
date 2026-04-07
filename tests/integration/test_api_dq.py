@@ -3,71 +3,97 @@ from datetime import UTC, datetime
 from decimal import Decimal
 import uuid
 
-from db.models import Market, DataQualityResult
+from db.models import DataQualityResult, Market
 
 
 def test_get_dq_summary_empty(client):
-    """Test DQ summary when no results exist."""
     response = client.get("/dq/summary")
     assert response.status_code == 200
     data = response.json()
     assert data["summary"]["total_checks"] == 0
     assert data["summary"]["status_distribution"] == {}
+    assert data["summary"]["top_blocking_reasons"] == []
     assert data["recent_results"] == []
 
 
 def test_get_dq_summary_with_data(client):
-    """Test DQ summary with sample data."""
     from tests.integration.conftest import TestSessionLocal
+
     session = TestSessionLocal()
+    checked_at = datetime.now(UTC)
     try:
-        # Create test market
-        market = Market(
-            id=uuid.uuid4(),
-            market_id="test-market",
-            question="Test market?",
-            market_status="active_accepting_orders",
-            source_updated_at=datetime.now(UTC),
-        )
-        session.add(market)
+        markets = [
+            Market(
+                id=uuid.uuid4(),
+                market_id="test-market-pass-1",
+                question="Pass market 1?",
+                market_status="active_accepting_orders",
+                source_updated_at=datetime.now(UTC),
+            ),
+            Market(
+                id=uuid.uuid4(),
+                market_id="test-market-pass-2",
+                question="Pass market 2?",
+                market_status="active_accepting_orders",
+                source_updated_at=datetime.now(UTC),
+            ),
+            Market(
+                id=uuid.uuid4(),
+                market_id="test-market-warn-1",
+                question="Warn market?",
+                market_status="active_accepting_orders",
+                source_updated_at=datetime.now(UTC),
+            ),
+            Market(
+                id=uuid.uuid4(),
+                market_id="test-market-fail-1",
+                question="Fail market?",
+                market_status="active_accepting_orders",
+                source_updated_at=datetime.now(UTC),
+            ),
+        ]
+        session.add_all(markets)
         session.commit()
 
-        # Create DQ results with different statuses
         results = [
             DataQualityResult(
                 id=uuid.uuid4(),
-                market_ref_id=market.id,
-                checked_at=datetime.now(UTC),
+                market_ref_id=markets[0].id,
+                checked_at=checked_at,
                 status="pass",
                 score=Decimal("0.95"),
                 failure_count=0,
+                result_details={"blocking_reason_codes": []},
                 rule_version="v1.0",
             ),
             DataQualityResult(
                 id=uuid.uuid4(),
-                market_ref_id=market.id,
-                checked_at=datetime.now(UTC),
+                market_ref_id=markets[1].id,
+                checked_at=checked_at,
                 status="pass",
                 score=Decimal("0.90"),
                 failure_count=0,
+                result_details={"blocking_reason_codes": []},
                 rule_version="v1.0",
             ),
             DataQualityResult(
                 id=uuid.uuid4(),
-                market_ref_id=market.id,
-                checked_at=datetime.now(UTC),
+                market_ref_id=markets[2].id,
+                checked_at=checked_at,
                 status="warn",
                 score=Decimal("0.75"),
                 failure_count=1,
+                result_details={"blocking_reason_codes": []},
                 rule_version="v1.0",
             ),
             DataQualityResult(
                 id=uuid.uuid4(),
-                market_ref_id=market.id,
-                checked_at=datetime.now(UTC),
+                market_ref_id=markets[3].id,
+                checked_at=checked_at,
                 status="fail",
                 score=Decimal("0.50"),
                 failure_count=3,
+                result_details={"blocking_reason_codes": ["REJ_DATA_STALE"]},
                 rule_version="v1.0",
             ),
         ]
@@ -80,45 +106,101 @@ def test_get_dq_summary_with_data(client):
     assert response.status_code == 200
     data = response.json()
 
-    # Check summary
     summary = data["summary"]
     assert summary["total_checks"] == 4
     assert summary["status_distribution"]["pass"] == 2
     assert summary["status_distribution"]["warn"] == 1
     assert summary["status_distribution"]["fail"] == 1
-    assert summary["pass_rate"] == 0.5  # 2 out of 4
-
-    # Check recent results
+    assert summary["pass_rate"] == 0.5
+    assert summary["latest_checked_at"] is not None
+    assert summary["top_blocking_reasons"][0]["reason_code"] == "REJ_DATA_STALE"
     assert len(data["recent_results"]) == 4
+    assert data["recent_results"][0]["status"] == "fail"
+    assert data["recent_results"][0]["market_id"] == "test-market-fail-1"
+
+
+def test_get_dq_summary_uses_latest_batch_only(client):
+    from tests.integration.conftest import TestSessionLocal
+
+    session = TestSessionLocal()
+    market = Market(
+        id=uuid.uuid4(),
+        market_id="batch-market",
+        question="Batch market?",
+        market_status="active_accepting_orders",
+        source_updated_at=datetime.now(UTC),
+    )
+    session.add(market)
+    session.commit()
+
+    old_checked_at = datetime(2026, 1, 1, tzinfo=UTC)
+    new_checked_at = datetime(2026, 4, 1, tzinfo=UTC)
+    session.add_all(
+        [
+            DataQualityResult(
+                id=uuid.uuid4(),
+                market_ref_id=market.id,
+                checked_at=old_checked_at,
+                status="fail",
+                score=Decimal("0.40"),
+                failure_count=2,
+                result_details={"blocking_reason_codes": ["REJ_DATA_STALE"]},
+                rule_version="v1.0",
+            ),
+            DataQualityResult(
+                id=uuid.uuid4(),
+                market_ref_id=market.id,
+                checked_at=new_checked_at,
+                status="pass",
+                score=Decimal("0.95"),
+                failure_count=0,
+                result_details={"blocking_reason_codes": []},
+                rule_version="v1.1",
+            ),
+        ]
+    )
+    session.commit()
+    session.close()
+
+    response = client.get("/dq/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["total_checks"] == 1
+    assert data["summary"]["status_distribution"] == {"pass": 1}
+    assert data["recent_results"][0]["status"] == "pass"
 
 
 def test_get_dq_summary_limit(client):
-    """Test DQ summary with limit parameter."""
     from tests.integration.conftest import TestSessionLocal
+
     session = TestSessionLocal()
+    checked_at = datetime.now(UTC)
     try:
-        market = Market(
-            id=uuid.uuid4(),
-            market_id="test-market",
-            question="Test market?",
-            market_status="active_accepting_orders",
-            source_updated_at=datetime.now(UTC),
-        )
-        session.add(market)
+        markets = [
+            Market(
+                id=uuid.uuid4(),
+                market_id=f"test-market-{index:02d}",
+                question=f"Test market {index}?",
+                market_status="active_accepting_orders",
+                source_updated_at=datetime.now(UTC),
+            )
+            for index in range(15)
+        ]
+        session.add_all(markets)
         session.commit()
 
-        # Create 15 DQ results
         results = [
             DataQualityResult(
                 id=uuid.uuid4(),
                 market_ref_id=market.id,
-                checked_at=datetime.now(UTC),
+                checked_at=checked_at,
                 status="pass",
                 score=Decimal("0.95"),
                 failure_count=0,
+                result_details={"blocking_reason_codes": []},
                 rule_version="v1.0",
             )
-            for _ in range(15)
+            for market in markets
         ]
         session.add_all(results)
         session.commit()
@@ -132,8 +214,8 @@ def test_get_dq_summary_limit(client):
 
 
 def test_get_market_dq_result(client):
-    """Test getting DQ result for a specific market."""
     from tests.integration.conftest import TestSessionLocal
+
     session = TestSessionLocal()
     try:
         market = Market(
@@ -146,7 +228,6 @@ def test_get_market_dq_result(client):
         session.add(market)
         session.commit()
 
-        # Create DQ result
         dq_result = DataQualityResult(
             id=uuid.uuid4(),
             market_ref_id=market.id,
@@ -174,15 +255,14 @@ def test_get_market_dq_result(client):
 
 
 def test_get_market_dq_result_market_not_found(client):
-    """Test getting DQ result for non-existent market."""
     response = client.get("/dq/markets/nonexistent-market")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
 def test_get_market_dq_result_no_result(client):
-    """Test getting DQ result when market exists but has no results."""
     from tests.integration.conftest import TestSessionLocal
+
     session = TestSessionLocal()
     try:
         market = Market(
@@ -203,8 +283,8 @@ def test_get_market_dq_result_no_result(client):
 
 
 def test_get_market_dq_result_latest(client):
-    """Test that only the latest DQ result is returned."""
     from tests.integration.conftest import TestSessionLocal
+
     session = TestSessionLocal()
     try:
         market = Market(
@@ -217,7 +297,6 @@ def test_get_market_dq_result_latest(client):
         session.add(market)
         session.commit()
 
-        # Create multiple DQ results
         old_result = DataQualityResult(
             id=uuid.uuid4(),
             market_ref_id=market.id,
@@ -245,6 +324,5 @@ def test_get_market_dq_result_latest(client):
     assert response.status_code == 200
     data = response.json()
     result = data["result"]
-    # Should return the newer result
     assert result["status"] == "pass"
     assert result["rule_version"] == "v1.1"

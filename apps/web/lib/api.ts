@@ -10,6 +10,15 @@ export interface ApiError {
   details?: string
 }
 
+function isApiError(value: unknown): value is ApiError {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const candidate = value as Partial<ApiError>
+  return typeof candidate.status === "number" && typeof candidate.message === "string"
+}
+
 export async function apiGet<T>(endpoint: string): Promise<T> {
   const url = `${API_URL}${endpoint}`
   console.log(`[API] GET ${url}`)
@@ -38,7 +47,7 @@ export async function apiGet<T>(endpoint: string): Promise<T> {
 
     return await response.json()
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (isApiError(error)) {
       throw error
     }
     throw {
@@ -78,7 +87,7 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
 
     return await response.json()
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (isApiError(error)) {
       throw error
     }
     throw {
