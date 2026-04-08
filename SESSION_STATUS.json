@@ -1,168 +1,191 @@
 ﻿{
-  "last_updated": "2026-04-07 09:58:33 +08:00",
-  "project": "Polymarket Tail Risk Web App",
-  "phase": "development_in_progress",
-  "current_wave": "Wave 1",
-  "completed": [
-    "v4_research_prd_finalized",
-    "web_architecture_plan_finalized",
-    "m1_m2_backlog_finalized",
-    "wave1_execution_packages_finalized",
-    "tech_stack_and_team_split_confirmed",
-    "pkg_plat_01_completed",
-    "pkg_data_01_completed",
-    "pkg_plat_02_completed",
-    "pkg_data_02_completed",
-    "pkg_data_03_completed",
-    "pkg_plat_03_completed",
-    "pkg_risk_01_completed",
-    "pkg_risk_02_completed",
-    "pkg_risk_03_completed"
-  ],
-  "in_progress": [
-    "ready_for_pkg_risk_04"
-  ],
-  "next_task": "PKG-RISK-04",
-  "next_actions_ordered": [
-    "PKG-RISK-04"
-  ],
-  "source_documents": [
-    "polymarket_tail_risk_system_v4_research_prd.md",
-    "polymarket_tail_risk_web_app_architecture_plan.md",
-    "polymarket_tail_risk_m1_m2_backlog.md",
-    "polymarket_tail_risk_wave1_execution_packages.md"
-  ],
-  "checkpoint_policy": {
-    "update_after_each_package": true,
-    "files_to_update": [
-      "SESSION_STATUS.md",
-      "SESSION_STATUS.json",
-      "WORKLOG.md"
-    ]
-  },
-  "known_risks": [
-    "agent_disconnects",
-    "audit_or_version_fields_being_skipped",
-    "drift_from_module_contracts",
-    "public_feed_full_scan_cost",
-    "snapshot_only_supports_binary_yes_no_markets",
-    "dq_default_scope_is_snapshot_covered_subset",
-    "tagging_structured_match_is_placeholder",
-    "tagging_rule_coverage_for_non_crypto_is_low"
-  ],
-  "verification": {
-    "pkg_plat_01": {
-      "status": "ok",
-      "web_status": 200,
-      "api_status": 200,
-      "worker_status": "ready",
-      "notes": "Initial project skeleton and local stack boot completed."
-    },
-    "pkg_data_01": {
-      "status": "ok",
-      "migration_upgrade": "ok",
-      "migration_downgrade": "ok",
-      "core_tables": [
-        "markets",
-        "market_snapshots",
-        "data_quality_results",
-        "decision_logs",
-        "audit_logs"
-      ]
-    },
-    "pkg_plat_02": {
-      "status": "ok",
-      "worker_manual_task": "ok",
-      "beat_schedule": "ok",
-      "notes": "Worker and beat are usable in local SQLite-backed development mode."
-    },
-    "pkg_data_02": {
-      "status": "ok",
-      "service_smoke_test": {
-        "market_sync_limit_pages_1": {
-          "created": 1817,
-          "updated": 0
-        },
-        "snapshot_limit_5": {
-          "created": 5,
-          "skipped_existing_on_rerun": 5
-        }
-      },
-      "notes": "Market metadata and snapshot ingestion path validated."
-    },
-    "pkg_data_03": {
-      "status": "ok",
-      "service_smoke_test": {
-        "snapshot_limit_20": {
-          "created": 19,
-          "skipped_missing_mapping": 1
-        },
-        "dq_limit_20": {
-          "created": 20,
-          "pass": 11,
-          "warn": 0,
-          "fail": 9
-        }
-      },
-      "notes": "DQ rule engine v1 is producing pass/fail outputs and alert payloads."
-    },
-    "pkg_plat_03": {
-      "status": "ok",
-      "api_request_audit": "ok",
-      "worker_success_audit": {
-        "market_snapshot_capture": "ok",
-        "market_dq_scan": "ok"
-      },
-      "notes": "Audit logging is non-blocking and linked to request/task identifiers."
-    },
-    "pkg_risk_01": {
-      "status": "ok",
-      "dictionary_seed": {
-        "created": 24,
-        "updated": 0,
-        "total": 24
-      },
-      "version_workflow": {
-        "create_activate_v1": "ok",
-        "create_activate_v2": "ok",
-        "rollback_clone": "ok"
-      },
-      "notes": "Tag dictionary, versioning, rollback, and audit baseline are available."
-    },
-    "pkg_risk_02": {
-      "status": "ok",
-      "service_smoke_test": {
-        "classify_markets_limit_10": {
-          "selected_markets": 10,
-          "created": 10,
-          "tagged": 2,
-          "review_required": 8,
-          "blocked": 0
-        }
-      },
-      "notes": "Automatic classification writes results, explanations, and review tasks."
-    },
-    "pkg_risk_03": {
-      "status": "ok",
-      "calibration_service": {
-        "compute_single_unit": "ok",
-        "recompute_all_units": "ok"
-      },
-      "netev_service": {
-        "single_market_evaluation": "ok",
-        "batch_evaluation": "ok",
-        "decision_log_write": "ok",
-        "reason_code_dictionary": "ok"
-      },
-      "api_validation": {
-        "calibration_api": "ok",
-        "netev_api": "ok"
-      },
-      "pytest": {
-        "selected_tests": "8 passed",
-        "warning": "Pydantic class-based Config deprecation (existing)"
-      },
-      "notes": "M3 calibration and NetEV are now wired to historical samples, DQ, scoring, reason codes, decision logs, and web UI actions."
-    }
-  }
+    "last_updated":  "2026-04-08 16:21:33 +08:00",
+    "project":  "Polymarket Tail Risk Web App",
+    "phase":  "development_in_progress",
+    "current_wave":  "Wave 1",
+    "completed":  [
+                      "v4_research_prd_finalized",
+                      "web_architecture_plan_finalized",
+                      "m1_m2_backlog_finalized",
+                      "wave1_execution_packages_finalized",
+                      "tech_stack_and_team_split_confirmed",
+                      "pkg_plat_01_completed",
+                      "pkg_data_01_completed",
+                      "pkg_plat_02_completed",
+                      "pkg_data_02_completed",
+                      "pkg_data_03_completed",
+                      "pkg_plat_03_completed",
+                      "pkg_risk_01_completed",
+                      "pkg_risk_02_completed",
+                      "pkg_risk_03_completed",
+                      "pkg_risk_04_completed"
+                  ],
+    "in_progress":  [
+                        "pending_next_package_planning"
+                    ],
+    "next_task":  "TBD_NEXT_PACKAGE",
+    "next_actions_ordered":  [
+
+                             ],
+    "source_documents":  [
+                             "polymarket_tail_risk_system_v4_research_prd.md",
+                             "polymarket_tail_risk_web_app_architecture_plan.md",
+                             "polymarket_tail_risk_m1_m2_backlog.md",
+                             "polymarket_tail_risk_wave1_execution_packages.md"
+                         ],
+    "checkpoint_policy":  {
+                              "update_after_each_package":  true,
+                              "files_to_update":  [
+                                                      "SESSION_STATUS.md",
+                                                      "SESSION_STATUS.json",
+                                                      "WORKLOG.md"
+                                                  ]
+                          },
+    "known_risks":  [
+                        "agent_disconnects",
+                        "audit_or_version_fields_being_skipped",
+                        "drift_from_module_contracts",
+                        "public_feed_full_scan_cost",
+                        "snapshot_only_supports_binary_yes_no_markets",
+                        "dq_default_scope_is_snapshot_covered_subset",
+                        "tagging_structured_match_is_placeholder",
+                        "tagging_rule_coverage_for_non_crypto_is_low"
+                    ],
+    "verification":  {
+                         "pkg_plat_01":  {
+                                             "status":  "ok",
+                                             "web_status":  200,
+                                             "api_status":  200,
+                                             "worker_status":  "ready",
+                                             "notes":  "Initial project skeleton and local stack boot completed."
+                                         },
+                         "pkg_data_01":  {
+                                             "status":  "ok",
+                                             "migration_upgrade":  "ok",
+                                             "migration_downgrade":  "ok",
+                                             "core_tables":  [
+                                                                 "markets",
+                                                                 "market_snapshots",
+                                                                 "data_quality_results",
+                                                                 "decision_logs",
+                                                                 "audit_logs"
+                                                             ]
+                                         },
+                         "pkg_plat_02":  {
+                                             "status":  "ok",
+                                             "worker_manual_task":  "ok",
+                                             "beat_schedule":  "ok",
+                                             "notes":  "Worker and beat are usable in local SQLite-backed development mode."
+                                         },
+                         "pkg_data_02":  {
+                                             "status":  "ok",
+                                             "service_smoke_test":  {
+                                                                        "market_sync_limit_pages_1":  {
+                                                                                                          "created":  1817,
+                                                                                                          "updated":  0
+                                                                                                      },
+                                                                        "snapshot_limit_5":  {
+                                                                                                 "created":  5,
+                                                                                                 "skipped_existing_on_rerun":  5
+                                                                                             }
+                                                                    },
+                                             "notes":  "Market metadata and snapshot ingestion path validated."
+                                         },
+                         "pkg_data_03":  {
+                                             "status":  "ok",
+                                             "service_smoke_test":  {
+                                                                        "snapshot_limit_20":  {
+                                                                                                  "created":  19,
+                                                                                                  "skipped_missing_mapping":  1
+                                                                                              },
+                                                                        "dq_limit_20":  {
+                                                                                            "created":  20,
+                                                                                            "pass":  11,
+                                                                                            "warn":  0,
+                                                                                            "fail":  9
+                                                                                        }
+                                                                    },
+                                             "notes":  "DQ rule engine v1 is producing pass/fail outputs and alert payloads."
+                                         },
+                         "pkg_plat_03":  {
+                                             "status":  "ok",
+                                             "api_request_audit":  "ok",
+                                             "worker_success_audit":  {
+                                                                          "market_snapshot_capture":  "ok",
+                                                                          "market_dq_scan":  "ok"
+                                                                      },
+                                             "notes":  "Audit logging is non-blocking and linked to request/task identifiers."
+                                         },
+                         "pkg_risk_01":  {
+                                             "status":  "ok",
+                                             "dictionary_seed":  {
+                                                                     "created":  24,
+                                                                     "updated":  0,
+                                                                     "total":  24
+                                                                 },
+                                             "version_workflow":  {
+                                                                      "create_activate_v1":  "ok",
+                                                                      "create_activate_v2":  "ok",
+                                                                      "rollback_clone":  "ok"
+                                                                  },
+                                             "notes":  "Tag dictionary, versioning, rollback, and audit baseline are available."
+                                         },
+                         "pkg_risk_02":  {
+                                             "status":  "ok",
+                                             "service_smoke_test":  {
+                                                                        "classify_markets_limit_10":  {
+                                                                                                          "selected_markets":  10,
+                                                                                                          "created":  10,
+                                                                                                          "tagged":  2,
+                                                                                                          "review_required":  8,
+                                                                                                          "blocked":  0
+                                                                                                      }
+                                                                    },
+                                             "notes":  "Automatic classification writes results, explanations, and review tasks."
+                                         },
+                         "pkg_risk_03":  {
+                                             "status":  "ok",
+                                             "calibration_service":  {
+                                                                         "compute_single_unit":  "ok",
+                                                                         "recompute_all_units":  "ok"
+                                                                     },
+                                             "netev_service":  {
+                                                                   "single_market_evaluation":  "ok",
+                                                                   "batch_evaluation":  "ok",
+                                                                   "decision_log_write":  "ok",
+                                                                   "reason_code_dictionary":  "ok"
+                                                               },
+                                             "api_validation":  {
+                                                                    "calibration_api":  "ok",
+                                                                    "netev_api":  "ok"
+                                                                },
+                                             "pytest":  {
+                                                            "selected_tests":  "8 passed",
+                                                            "warning":  "Pydantic class-based Config deprecation (existing)"
+                                                        },
+                                             "notes":  "M3 calibration and NetEV are now wired to historical samples, DQ, scoring, reason codes, decision logs, and web UI actions."
+                                         },
+                         "pkg_risk_04":  {
+                                             "status":  "ok",
+                                             "risk_service":  {
+                                                                  "exposure_aggregation":  "ok",
+                                                                  "auto_transition":  "ok",
+                                                                  "kill_switch":  "ok"
+                                                              },
+                                             "api_validation":  {
+                                                                    "risk_api":  "ok"
+                                                                },
+                                             "web_validation":  {
+                                                                    "calibration_page_repaired":  "ok",
+                                                                    "netev_page_repaired":  "ok",
+                                                                    "risk_page_repaired":  "ok",
+                                                                    "tsc_no_emit":  "ok"
+                                                                },
+                                             "pytest":  {
+                                                            "selected_tests":  "7 passed",
+                                                            "warning":  "Pydantic class-based Config deprecation (existing)"
+                                                        },
+                                             "notes":  "M4 risk controls are now verified, and the corrupted M3/M4 dashboard pages were repaired."
+                                         }
+                     }
 }
