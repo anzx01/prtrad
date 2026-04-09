@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from db.session import get_db
 from services.review import ReviewService, ReviewTaskInput, ReviewTaskUpdate
+from services.review.service import normalize_review_status
 
 
 router = APIRouter(prefix="/review", tags=["review"])
@@ -64,6 +65,11 @@ def get_review_queue(
     review_service = ReviewService(db=session)
 
     offset = (page - 1) * page_size
+    total = review_service.count_review_queue(
+        queue_status=queue_status,
+        priority=priority,
+        assigned_to=assigned_to,
+    )
     tasks = review_service.get_review_queue(
         queue_status=queue_status,
         priority=priority,
@@ -78,7 +84,7 @@ def get_review_queue(
             "id": str(task.id),
             "market_ref_id": str(task.market_ref_id),
             "classification_result_id": str(task.classification_result_id),
-            "queue_status": task.queue_status,
+            "queue_status": normalize_review_status(task.queue_status),
             "review_reason_code": task.review_reason_code,
             "priority": task.priority,
             "assigned_to": task.assigned_to,
@@ -96,7 +102,7 @@ def get_review_queue(
 
     return ReviewQueueResponse(
         tasks=task_data,
-        total=len(task_data),
+        total=total,
         page=page,
         page_size=page_size,
     )
@@ -125,7 +131,7 @@ def get_review_task(
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
         "classification_result_id": str(task.classification_result_id),
-        "queue_status": task.queue_status,
+        "queue_status": normalize_review_status(task.queue_status),
         "review_reason_code": task.review_reason_code,
         "priority": task.priority,
         "assigned_to": task.assigned_to,
@@ -186,7 +192,7 @@ def create_review_task(
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
         "classification_result_id": str(task.classification_result_id),
-        "queue_status": task.queue_status,
+        "queue_status": normalize_review_status(task.queue_status),
         "review_reason_code": task.review_reason_code,
         "priority": task.priority,
         "assigned_to": task.assigned_to,
@@ -234,7 +240,7 @@ def update_review_task(
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
         "classification_result_id": str(task.classification_result_id),
-        "queue_status": task.queue_status,
+        "queue_status": normalize_review_status(task.queue_status),
         "review_reason_code": task.review_reason_code,
         "priority": task.priority,
         "assigned_to": task.assigned_to,
@@ -276,7 +282,7 @@ def approve_review_task(
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
         "classification_result_id": str(task.classification_result_id),
-        "queue_status": task.queue_status,
+        "queue_status": normalize_review_status(task.queue_status),
         "review_reason_code": task.review_reason_code,
         "priority": task.priority,
         "assigned_to": task.assigned_to,
@@ -319,7 +325,7 @@ def reject_review_task(
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
         "classification_result_id": str(task.classification_result_id),
-        "queue_status": task.queue_status,
+        "queue_status": normalize_review_status(task.queue_status),
         "review_reason_code": task.review_reason_code,
         "priority": task.priority,
         "assigned_to": task.assigned_to,

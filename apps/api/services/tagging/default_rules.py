@@ -1,0 +1,227 @@
+from __future__ import annotations
+
+from services.tagging.contracts import TagRuleInput, TagRuleVersionCreateInput
+
+DEFAULT_RULE_VERSION_CODE = "tag_default_v1"
+
+_CRYPTO_CATEGORY_VALUES = [
+    "up or down",
+    "crypto prices",
+    "bitcoin",
+    "ethereum",
+    "crypto",
+]
+
+_CRYPTO_QUESTION_KEYWORDS = [
+    "up or down",
+    "higher or lower",
+]
+
+_CRYPTO_ASSET_KEYWORDS = [
+    "bitcoin",
+    "ethereum",
+    "solana",
+    "dogecoin",
+    "xrp",
+    "bnb",
+    "hyperliquid",
+    "hype",
+]
+
+_SPORTS_CATEGORY_VALUES = [
+    "sports",
+    "esports",
+]
+
+_BLACKLIST_TOPIC_KEYWORDS = [
+    "election",
+    "president",
+    "senate",
+    "congress",
+    "inflation",
+    "cpi",
+    "fed",
+    "war",
+    "ceasefire",
+    "hurricane",
+    "earthquake",
+    "wildfire",
+]
+
+
+def _default_rules() -> list[TagRuleInput]:
+    return [
+        TagRuleInput(
+            rule_code="CRYPTO_CAT_BY_CATEGORY",
+            rule_name="Classify crypto price markets by category_raw",
+            rule_kind="keyword",
+            action_type="assign_primary_category",
+            target_tag_code="CAT_NUMERIC",
+            priority=10,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": _CRYPTO_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.96},
+            notes="Baseline whitelist for recurring crypto price questions.",
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_CAT_BY_QUESTION",
+            rule_name="Classify crypto up/down markets by question text",
+            rule_kind="keyword",
+            action_type="assign_primary_category",
+            target_tag_code="CAT_NUMERIC",
+            priority=20,
+            match_scope=["question"],
+            match_operator="contains_any",
+            match_payload={"keywords": _CRYPTO_QUESTION_KEYWORDS},
+            effect_payload={"confidence": 0.88},
+            notes="Question fallback when upstream category labels are noisy.",
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_WHITE_BY_CATEGORY",
+            rule_name="Allow crypto price markets into white bucket by category_raw",
+            rule_kind="keyword",
+            action_type="set_admission_bucket",
+            target_tag_code="LIST_WHITE",
+            priority=30,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": _CRYPTO_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.94},
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_WHITE_BY_QUESTION",
+            rule_name="Allow crypto up/down markets into white bucket by question text",
+            rule_kind="keyword",
+            action_type="set_admission_bucket",
+            target_tag_code="LIST_WHITE",
+            priority=40,
+            match_scope=["question"],
+            match_operator="contains_any",
+            match_payload={"keywords": _CRYPTO_QUESTION_KEYWORDS},
+            effect_payload={"confidence": 0.86},
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_OBJECTIVE_RULE",
+            rule_name="Mark crypto up/down markets as objective resolution",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_OBJECTIVE_RESOLUTION",
+            priority=50,
+            match_scope=["question", "category_raw"],
+            match_operator="contains_any",
+            match_payload={"keywords": _CRYPTO_QUESTION_KEYWORDS},
+            effect_payload={"confidence": 0.90},
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_SOURCE_RULE",
+            rule_name="Mark crypto price feeds as authority-backed",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_SOURCE_AUTHORITY_CLEAR",
+            priority=60,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": ["crypto prices", "bitcoin", "ethereum", "crypto"]},
+            effect_payload={"confidence": 0.82},
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_SINGLE_ASSET_RULE",
+            rule_name="Mark crypto markets as single-asset correlated",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_SINGLE_ASSET_CORRELATED",
+            priority=70,
+            match_scope=["question", "category_raw", "related_tags"],
+            match_operator="contains_any",
+            match_payload={"keywords": _CRYPTO_ASSET_KEYWORDS},
+            effect_payload={"confidence": 0.80},
+        ),
+        TagRuleInput(
+            rule_code="CRYPTO_PRE_CLOSE_RULE",
+            rule_name="Mark crypto up/down markets as pre-close jump sensitive",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_PRE_CLOSE_INFORMATION_JUMP",
+            priority=80,
+            match_scope=["question"],
+            match_operator="contains_any",
+            match_payload={"keywords": _CRYPTO_QUESTION_KEYWORDS},
+            effect_payload={"confidence": 0.72},
+        ),
+        TagRuleInput(
+            rule_code="SPORTS_CAT_RULE",
+            rule_name="Classify sports and esports markets",
+            rule_kind="keyword",
+            action_type="assign_primary_category",
+            target_tag_code="CAT_SPORTS",
+            priority=110,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": _SPORTS_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.97},
+        ),
+        TagRuleInput(
+            rule_code="SPORTS_BLACK_RULE",
+            rule_name="Block sports and esports markets by default",
+            rule_kind="keyword",
+            action_type="set_admission_bucket",
+            target_tag_code="LIST_BLACK",
+            priority=120,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": _SPORTS_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.97},
+        ),
+        TagRuleInput(
+            rule_code="SPORTS_MANUAL_RULE",
+            rule_name="Flag sports and esports markets as manual-interpretation heavy",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_MANUAL_INTERPRETATION_REQUIRED",
+            priority=130,
+            match_scope=["category_raw"],
+            match_operator="equals_any",
+            match_payload={"keywords": _SPORTS_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.84},
+        ),
+        TagRuleInput(
+            rule_code="BLACKLIST_TOPIC_RULE",
+            rule_name="Block politics, macro, war, and disaster topics",
+            rule_kind="keyword",
+            action_type="set_admission_bucket",
+            target_tag_code="LIST_BLACK",
+            priority=140,
+            match_scope=["question", "description", "category_raw"],
+            match_operator="contains_any",
+            match_payload={"keywords": _BLACKLIST_TOPIC_KEYWORDS},
+            effect_payload={"confidence": 0.93},
+        ),
+        TagRuleInput(
+            rule_code="BLACKLIST_DISPUTE_RULE",
+            rule_name="Mark blocked topics as dispute-prone",
+            rule_kind="keyword",
+            action_type="add_risk_factor",
+            target_tag_code="RF_DISPUTE_TEMPLATE_SIMILAR",
+            priority=150,
+            match_scope=["question", "description", "category_raw"],
+            match_operator="contains_any",
+            match_payload={"keywords": _BLACKLIST_TOPIC_KEYWORDS},
+            effect_payload={"confidence": 0.78},
+        ),
+    ]
+
+
+def build_default_rule_version_create_input(
+    *,
+    version_code: str = DEFAULT_RULE_VERSION_CODE,
+) -> TagRuleVersionCreateInput:
+    return TagRuleVersionCreateInput(
+        version_code=version_code,
+        change_reason="Seed baseline tagging rules for repeatable local setup.",
+        evidence_summary="Derived from docs/tagging guidance and current development-market shapes.",
+        impact_summary="Auto-tags crypto up/down markets while blocking sports/esports and high-dispute topics.",
+        rollback_plan="Activate a prior tag_rule_version or publish a rollback version if these defaults regress.",
+        version_notes="Default baseline rules for development bootstrap and early M3 validation.",
+        rules=_default_rules(),
+    )

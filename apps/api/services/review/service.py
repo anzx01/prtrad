@@ -1,45 +1,33 @@
-"""
-审核任务服务
-
-实现审核任务流的核心逻辑：
-1. 创建审核任务
-2. 查询审核队列
-3. 更新审核状态
-4. 审核决策（通过/拒绝）
-5. 审核任务状态迁移
-"""
+"""Review task service."""
 
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import case, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from db.models import (
-    AuditLog,
-    Market,
-    MarketClassificationResult,
-    MarketReviewTask,
-)
+from db.models import AuditLog, MarketClassificationResult, MarketReviewTask
 
 from .contracts import ReviewTaskInput, ReviewTaskUpdate
 
 
-# 审核任务状态定义
+REVIEW_STATUS_OPEN = "open"
 REVIEW_STATUS_PENDING = "pending"
 REVIEW_STATUS_IN_PROGRESS = "in_progress"
 REVIEW_STATUS_APPROVED = "approved"
 REVIEW_STATUS_REJECTED = "rejected"
 REVIEW_STATUS_CANCELLED = "cancelled"
 
-# 允许的状态迁移
+LEGACY_REVIEW_STATUS_ALIASES = {
+    REVIEW_STATUS_OPEN: REVIEW_STATUS_PENDING,
+}
+
 ALLOWED_STATUS_TRANSITIONS = {
     REVIEW_STATUS_PENDING: [REVIEW_STATUS_IN_PROGRESS, REVIEW_STATUS_CANCELLED],
     REVIEW_STATUS_IN_PROGRESS: [REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED, REVIEW_STATUS_PENDING],
-    REVIEW_STATUS_APPROVED: [],  # 终态
-    REVIEW_STATUS_REJECTED: [],  # 终态
-    REVIEW_STATUS_CANCELLED: [],  # 终态
+    REVIEW_STATUS_APPROVED: [],
+    REVIEW_STATUS_REJECTED: [],
+    REVIEW_STATUS_CANCELLED: [],
 }
 
 
@@ -47,8 +35,23 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+def normalize_review_status(status: str | None) -> str | None:
+    if status is None:
+        return None
+    return LEGACY_REVIEW_STATUS_ALIASES.get(status, status)
+
+
+def review_statuses_for_filter(status: str | None) -> tuple[str, ...] | None:
+    normalized = normalize_review_status(status)
+    if normalized is None:
+        return None
+    if normalized == REVIEW_STATUS_PENDING:
+        return (REVIEW_STATUS_PENDING, REVIEW_STATUS_OPEN)
+    return (normalized,)
+
+
 class ReviewService:
-    """审核任务服务"""
+    """Core review task workflow service."""
 
     def __init__(
         self,
@@ -61,24 +64,10 @@ class ReviewService:
         self.task_id = task_id
 
     def create_review_task(self, review_input: ReviewTaskInput) -> MarketReviewTask:
-        """
-        创建审核任务
-
-        Args:
-            review_input: 审核任务输入
-
-        Returns:
-            MarketReviewTask: 创建的审核任务
-
-        Raises:
-            ValueError: 如果分类结果不存在或已有审核任务
-        """
-        # 验证分类结果存在
         classification_result = self.db.get(MarketClassificationResult, review_input.classification_result_id)
         if not classification_result:
             raise ValueError(f"Classification result {review_input.classification_result_id} not found")
 
-        # 检查是否已存在审核任务
         existing_task = (
             self.db.execute(
                 select(MarketReviewTask).where(
@@ -93,7 +82,6 @@ class ReviewService:
                 f"Review task already exists for classification result {review_input.classification_result_id}"
             )
 
-        # 创建审核任务
         review_task = MarketReviewTask(
             market_ref_id=review_input.market_ref_id,
             classification_result_id=review_input.classification_result_id,
@@ -106,7 +94,6 @@ class ReviewService:
         self.db.add(review_task)
         self.db.flush()
 
-        # 写入审计日志
         self._write_audit_log(
             object_id=str(review_task.id),
             action="create_review_task",
@@ -129,33 +116,22 @@ class ReviewService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[MarketReviewTask]:
-        """
-        查询审核队列
-
-        Args:
-            queue_status: 队列状态过滤
-            priority: 优先级过滤
-            assigned_to: 分配人过滤
-            limit: 返回数量限制
-            offset: 偏移量
-
-        Returns:
-            list[MarketReviewTask]: 审核任务列表
-        """
         query = select(MarketReviewTask).options(
             selectinload(MarketReviewTask.market),
             selectinload(MarketReviewTask.classification_result),
         )
 
-        if queue_status:
-            query = query.where(MarketReviewTask.queue_status == queue_status)
+        status_filters = review_statuses_for_filter(queue_status)
+        if status_filters:
+            if len(status_filters) == 1:
+                query = query.where(MarketReviewTask.queue_status == status_filters[0])
+            else:
+                query = query.where(MarketReviewTask.queue_status.in_(status_filters))
         if priority:
             query = query.where(MarketReviewTask.priority == priority)
         if assigned_to:
             query = query.where(MarketReviewTask.assigned_to == assigned_to)
 
-        # 按优先级和创建时间排序
-        from sqlalchemy import case
         priority_order = case(
             {"urgent": 1, "high": 2, "normal": 3, "low": 4},
             value=MarketReviewTask.priority,
@@ -164,8 +140,28 @@ class ReviewService:
         query = query.order_by(priority_order, MarketReviewTask.created_at.asc())
 
         query = query.limit(limit).offset(offset)
-
         return list(self.db.execute(query).scalars().all())
+
+    def count_review_queue(
+        self,
+        queue_status: str | None = None,
+        priority: str | None = None,
+        assigned_to: str | None = None,
+    ) -> int:
+        query = select(func.count()).select_from(MarketReviewTask)
+
+        status_filters = review_statuses_for_filter(queue_status)
+        if status_filters:
+            if len(status_filters) == 1:
+                query = query.where(MarketReviewTask.queue_status == status_filters[0])
+            else:
+                query = query.where(MarketReviewTask.queue_status.in_(status_filters))
+        if priority:
+            query = query.where(MarketReviewTask.priority == priority)
+        if assigned_to:
+            query = query.where(MarketReviewTask.assigned_to == assigned_to)
+
+        return int(self.db.scalar(query) or 0)
 
     def update_review_task(
         self,
@@ -173,38 +169,21 @@ class ReviewService:
         update: ReviewTaskUpdate,
         actor_id: str | None = None,
     ) -> MarketReviewTask:
-        """
-        更新审核任务
-
-        Args:
-            review_task_id: 审核任务 ID
-            update: 更新数据
-            actor_id: 操作者 ID
-
-        Returns:
-            MarketReviewTask: 更新后的审核任务
-
-        Raises:
-            ValueError: 如果任务不存在或状态迁移不合法
-        """
         review_task = self.db.get(MarketReviewTask, review_task_id)
         if not review_task:
             raise ValueError(f"Review task {review_task_id} not found")
 
-        old_status = review_task.queue_status
-        changes = {}
+        old_status = normalize_review_status(review_task.queue_status) or review_task.queue_status
+        changes: dict[str, object] = {}
 
-        # 验证状态迁移
-        if update.queue_status and update.queue_status != old_status:
-            if update.queue_status not in ALLOWED_STATUS_TRANSITIONS.get(old_status, []):
-                raise ValueError(
-                    f"Invalid status transition from {old_status} to {update.queue_status}"
-                )
-            review_task.queue_status = update.queue_status
-            changes["queue_status"] = {"from": old_status, "to": update.queue_status}
+        next_status = normalize_review_status(update.queue_status)
+        if next_status and next_status != old_status:
+            if next_status not in ALLOWED_STATUS_TRANSITIONS.get(old_status, []):
+                raise ValueError(f"Invalid status transition from {old_status} to {next_status}")
+            review_task.queue_status = next_status
+            changes["queue_status"] = {"from": old_status, "to": next_status}
 
-            # 如果是终态，记录解决时间
-            if update.queue_status in [REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED, REVIEW_STATUS_CANCELLED]:
+            if next_status in [REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED, REVIEW_STATUS_CANCELLED]:
                 review_task.resolved_at = _now_utc()
                 changes["resolved_at"] = str(review_task.resolved_at)
 
@@ -222,7 +201,6 @@ class ReviewService:
 
         self.db.flush()
 
-        # 写入审计日志
         self._write_audit_log(
             object_id=str(review_task_id),
             action="update_review_task",
@@ -241,28 +219,17 @@ class ReviewService:
         actor_id: str,
         approval_notes: str | None = None,
     ) -> MarketReviewTask:
-        """
-        批准审核任务
-
-        Args:
-            review_task_id: 审核任务 ID
-            actor_id: 审核人 ID
-            approval_notes: 批准备注
-
-        Returns:
-            MarketReviewTask: 更新后的审核任务
-        """
         review_task = self.db.get(MarketReviewTask, review_task_id)
         if not review_task:
             raise ValueError(f"Review task {review_task_id} not found")
 
-        if review_task.queue_status != REVIEW_STATUS_IN_PROGRESS:
+        current_status = normalize_review_status(review_task.queue_status)
+        if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
-                f"Cannot approve task in status {review_task.queue_status}. "
+                f"Cannot approve task in status {current_status}. "
                 f"Task must be in {REVIEW_STATUS_IN_PROGRESS} status."
             )
 
-        # 更新任务状态
         review_task.queue_status = REVIEW_STATUS_APPROVED
         review_task.resolved_at = _now_utc()
         review_task.review_payload = {
@@ -274,7 +241,6 @@ class ReviewService:
 
         self.db.flush()
 
-        # 写入审计日志
         self._write_audit_log(
             object_id=str(review_task_id),
             action="approve_review",
@@ -295,29 +261,17 @@ class ReviewService:
         rejection_reason: str,
         rejection_notes: str | None = None,
     ) -> MarketReviewTask:
-        """
-        拒绝审核任务
-
-        Args:
-            review_task_id: 审核任务 ID
-            actor_id: 审核人 ID
-            rejection_reason: 拒绝原因码
-            rejection_notes: 拒绝备注
-
-        Returns:
-            MarketReviewTask: 更新后的审核任务
-        """
         review_task = self.db.get(MarketReviewTask, review_task_id)
         if not review_task:
             raise ValueError(f"Review task {review_task_id} not found")
 
-        if review_task.queue_status != REVIEW_STATUS_IN_PROGRESS:
+        current_status = normalize_review_status(review_task.queue_status)
+        if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
-                f"Cannot reject task in status {review_task.queue_status}. "
+                f"Cannot reject task in status {current_status}. "
                 f"Task must be in {REVIEW_STATUS_IN_PROGRESS} status."
             )
 
-        # 更新任务状态
         review_task.queue_status = REVIEW_STATUS_REJECTED
         review_task.resolved_at = _now_utc()
         review_task.review_payload = {
@@ -330,7 +284,6 @@ class ReviewService:
 
         self.db.flush()
 
-        # 写入审计日志
         self._write_audit_log(
             object_id=str(review_task_id),
             action="reject_review",
@@ -346,15 +299,6 @@ class ReviewService:
         return review_task
 
     def get_review_task(self, review_task_id: UUID) -> MarketReviewTask | None:
-        """
-        获取单个审核任务
-
-        Args:
-            review_task_id: 审核任务 ID
-
-        Returns:
-            MarketReviewTask | None: 审核任务或 None
-        """
         return self.db.execute(
             select(MarketReviewTask)
             .where(MarketReviewTask.id == review_task_id)
@@ -371,7 +315,6 @@ class ReviewService:
         result: str,
         payload: dict | None = None,
     ) -> None:
-        """写入审计日志"""
         if self.audit_service:
             self.audit_service.log(
                 object_type="market_review_task",
@@ -382,7 +325,6 @@ class ReviewService:
                 task_id=self.task_id,
             )
         else:
-            # 直接写入数据库
             audit_log = AuditLog(
                 actor_id="system",
                 actor_type="service",

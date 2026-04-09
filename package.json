@@ -15,10 +15,11 @@
     "task:snapshot-sync": "powershell -Command \"$env:PYTHONPATH='workers;apps/api'; .\\.venv\\Scripts\\celery.exe -A worker.celery_app:celery_app call worker.ingest.dispatch_snapshot_capture\"",
     "task:dq-run": "powershell -Command \"$env:PYTHONPATH='workers;apps/api'; .\\.venv\\Scripts\\celery.exe -A worker.celery_app:celery_app call worker.dq.dispatch_market_dq_scan\"",
     "task:tagging-run": "powershell -Command \"$env:PYTHONPATH='workers;apps/api'; .\\.venv\\Scripts\\celery.exe -A worker.celery_app:celery_app call worker.tagging.dispatch_market_auto_classification\"",
+    "seed:tagging-defaults": ".\\.venv\\Scripts\\python.exe scripts/seed_tagging_defaults.py",
     "db:upgrade": ".\\.venv\\Scripts\\python.exe -m alembic -c apps/api/alembic.ini upgrade head",
     "db:downgrade": ".\\.venv\\Scripts\\python.exe -m alembic -c apps/api/alembic.ini downgrade base",
     "db:current": ".\\.venv\\Scripts\\python.exe -m alembic -c apps/api/alembic.ini current",
-    "dev:prepare": "npm run db:upgrade"
+    "dev:prepare": "npm run db:upgrade && npm run seed:tagging-defaults"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -22,6 +22,12 @@ from db.models import (
     TagRuleVersion,
 )
 from db.session import session_scope
+from services.review.service import (
+    REVIEW_STATUS_CANCELLED,
+    REVIEW_STATUS_IN_PROGRESS,
+    REVIEW_STATUS_OPEN,
+    REVIEW_STATUS_PENDING,
+)
 
 
 ACTIVE_TAGGING_VERSION_STATUS = "active"
@@ -176,8 +182,45 @@ class MarketAutoClassificationService:
             .order_by(TagRuleVersion.activated_at.desc(), TagRuleVersion.created_at.desc())
         )
         if version is None:
-            raise ValueError("未找到 active 状态的 tagging 规则版本。")
+            raise ValueError("No active tagging rule version found")
         return version
+
+    @staticmethod
+    def _cancel_stale_review_tasks(
+        session,
+        *,
+        market_ref_id,
+        current_classification_result_id,
+        resolved_at: datetime,
+        superseding_rule_version: str,
+    ) -> None:
+        stale_tasks = session.scalars(
+            select(MarketReviewTask).where(
+                MarketReviewTask.market_ref_id == market_ref_id,
+                MarketReviewTask.classification_result_id != current_classification_result_id,
+                MarketReviewTask.queue_status.in_(
+                    (
+                        REVIEW_STATUS_PENDING,
+                        REVIEW_STATUS_OPEN,
+                        REVIEW_STATUS_IN_PROGRESS,
+                    )
+                ),
+            )
+        ).all()
+
+        for task in stale_tasks:
+            task.queue_status = REVIEW_STATUS_CANCELLED
+            task.resolved_at = resolved_at
+            review_payload = deepcopy(task.review_payload or {})
+            review_payload.update(
+                {
+                    "cancelled_reason": "superseded_by_reclassification",
+                    "superseded_at": resolved_at.isoformat(),
+                    "superseded_by_classification_result_id": str(current_classification_result_id),
+                    "superseded_rule_version": superseding_rule_version,
+                }
+            )
+            task.review_payload = review_payload
 
     @staticmethod
     def _match_rule(
@@ -334,6 +377,14 @@ class MarketAutoClassificationService:
                         session.add(result)
                         session.flush()
 
+                        self._cancel_stale_review_tasks(
+                            session,
+                            market_ref_id=market.id,
+                            current_classification_result_id=result.id,
+                            resolved_at=classified_at,
+                            superseding_rule_version=active_version.version_code,
+                        )
+
                         for assignment in outcome["assignments"]:
                             session.add(
                                 MarketTagAssignment(
@@ -343,7 +394,7 @@ class MarketAutoClassificationService:
                                     tag_type=assignment["tag_type"],
                                     assignment_role=assignment["assignment_role"],
                                     confidence=assignment["confidence"],
-                                    assignment_metadata=assignment["assignment_metadata"],
+                                    assignment_entry_metadata=assignment["assignment_metadata"],
                                 )
                             )
 
@@ -367,7 +418,7 @@ class MarketAutoClassificationService:
                                 MarketReviewTask(
                                     market_ref_id=market.id,
                                     classification_result_id=result.id,
-                                    queue_status="open",
+                                    queue_status=REVIEW_STATUS_PENDING,
                                     review_reason_code=outcome["review_task"]["review_reason_code"],
                                     priority=outcome["review_task"]["priority"],
                                     review_payload=outcome["review_task"]["review_payload"],
@@ -504,7 +555,7 @@ class MarketAutoClassificationService:
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_NO_CATEGORY_MATCH",
-                    rule_name="未命中一级类别规则",
+                    rule_name="No category match",
                     action_type="require_review",
                     explanation_type="review_decision",
                     explanation_payload={"reason_code": failure_reason_code},
@@ -518,7 +569,7 @@ class MarketAutoClassificationService:
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_CATEGORY_CONFLICT",
-                    rule_name="一级类别冲突",
+                    rule_name="Category conflict",
                     action_type="require_review",
                     explanation_type="conflict",
                     explanation_payload={"candidate_codes": sorted(category_candidates.keys())},
@@ -532,7 +583,7 @@ class MarketAutoClassificationService:
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_DEFAULT_GREY_BUCKET",
-                    rule_name="未命中准入桶规则，默认灰名单",
+                    rule_name="Default grey bucket",
                     action_type="set_admission_bucket",
                     explanation_type="default_bucket",
                     target_tag_code=selected_bucket_code,
@@ -546,7 +597,7 @@ class MarketAutoClassificationService:
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_BUCKET_CONFLICT",
-                    rule_name="准入桶冲突",
+                    rule_name="Bucket conflict",
                     action_type="require_review",
                     explanation_type="conflict",
                     explanation_payload={"candidate_codes": sorted(bucket_candidates.keys())},
@@ -573,7 +624,7 @@ class MarketAutoClassificationService:
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_LOW_CONFIDENCE",
-                    rule_name="分类置信度低于阈值",
+                    rule_name="Low confidence",
                     action_type="require_review",
                     explanation_type="review_decision",
                     confidence_delta=confidence,

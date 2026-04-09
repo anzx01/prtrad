@@ -14,6 +14,7 @@ from db.models import TagDictionaryEntry, TagRule, TagRuleVersion
 from db.session import session_scope
 from services.audit import AuditEvent, get_audit_log_service
 from services.tagging.contracts import TagDefinitionInput, TagRuleInput, TagRuleVersionCreateInput
+from services.tagging.default_rules import DEFAULT_RULE_VERSION_CODE, build_default_rule_version_create_input
 
 
 VALID_TAG_TYPES = {"category", "risk_factor", "list_bucket"}
@@ -544,6 +545,56 @@ class TaggingRuleService:
             )
         )
         return result
+
+    def seed_default_rule_version(
+        self,
+        *,
+        version_code: str = DEFAULT_RULE_VERSION_CODE,
+        actor_id: str | None = None,
+        actor_type: str | None = "system",
+        request_id: str | None = None,
+        auto_activate: bool = True,
+    ) -> dict[str, Any]:
+        self.seed_default_dictionary(
+            actor_id=actor_id,
+            actor_type=actor_type,
+            request_id=request_id,
+        )
+
+        existing = self.get_rule_version(version_code)
+        if existing is not None:
+            if not auto_activate or existing["status"] == ACTIVE_VERSION_STATUS:
+                return existing
+            if existing["status"] == DRAFT_VERSION_STATUS:
+                return self.activate_rule_version(
+                    version_code,
+                    actor_id=actor_id,
+                    actor_type=actor_type,
+                    request_id=request_id,
+                )
+
+            restore_code = f"{version_code}_restore_{_now_utc().strftime('%Y%m%d_%H%M%S')}"
+            return self.rollback_to_version(
+                target_version_code=version_code,
+                rollback_version_code=restore_code,
+                change_reason="Restore default baseline tagging rules for local setup.",
+                actor_id=actor_id,
+                actor_type=actor_type,
+                request_id=request_id,
+                evidence_summary="Restore the documented default tagging baseline after experiments.",
+                impact_summary="Re-activates the default local tagging baseline.",
+                rollback_plan="Activate another rule version or publish a follow-up rollback if baseline changes are needed.",
+                version_notes=f"Restored from {version_code} by seed_default_rule_version.",
+            )
+
+        draft = build_default_rule_version_create_input(version_code=version_code)
+        return self.create_rule_version(
+            draft,
+            actor_id=actor_id,
+            actor_type=actor_type,
+            request_id=request_id,
+            auto_activate=auto_activate,
+        )
 
     def upsert_tag_definition(
         self,

@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 # Add apps/api to sys.path before importing app modules
 api_path = Path(__file__).parent.parent.parent / "apps" / "api"
@@ -16,7 +16,7 @@ os.environ["APP_ENV"] = "test"
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import close_all_sessions, sessionmaker
 
 from db.base import Base
 from db import models  # noqa: F401 - Import models to register them with Base
@@ -24,15 +24,9 @@ from db.session import get_db
 from app.main import app
 
 
-# Create test engine with file-based database for sharing across connections
-test_db_path = Path(__file__).parent / "test.db"
-test_engine = create_engine(
-    f"sqlite:///{test_db_path}",
-    echo=False,
-)
-
-# Create test session factory
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+# Configure a session factory that will be rebound to a per-test engine.
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False)
+test_engine = None
 
 
 def override_get_db():
@@ -66,37 +60,29 @@ class MockAuditLogService:
 
 
 @pytest.fixture(scope="function", autouse=True)
-def setup_test_database():
-    """Create all tables in the test database before each test."""
-    # Close any existing connections first
-    test_engine.dispose()
+def setup_test_database(tmp_path):
+    """Create a fresh SQLite database for each integration test."""
+    global test_engine
 
-    # Remove old test database if exists
-    if test_db_path.exists():
-        try:
-            test_db_path.unlink()
-        except (PermissionError, OSError):
-            # If file is locked, wait a bit and try again
-            import time
-            time.sleep(0.1)
-            try:
-                test_db_path.unlink()
-            except (PermissionError, OSError):
-                pass  # File is locked, will be overwritten
+    close_all_sessions()
+    if test_engine is not None:
+        test_engine.dispose()
 
-    # Create all tables
+    test_db_path = tmp_path / "test.db"
+    test_engine = create_engine(
+        f"sqlite:///{test_db_path}",
+        echo=False,
+        connect_args={"check_same_thread": False},
+    )
+    TestSessionLocal.configure(bind=test_engine)
     Base.metadata.create_all(test_engine)
     yield
 
-    # Close all connections
-    test_engine.dispose()
-
-    # Clean up after test
-    if test_db_path.exists():
-        try:
-            test_db_path.unlink()
-        except (PermissionError, OSError):
-            pass  # File is locked, will be cleaned up later
+    close_all_sessions()
+    app.dependency_overrides.clear()
+    if test_engine is not None:
+        test_engine.dispose()
+        test_engine = None
 
 
 @pytest.fixture(scope="function")

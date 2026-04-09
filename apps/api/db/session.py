@@ -1,6 +1,6 @@
-from contextlib import contextmanager
+﻿from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
@@ -14,8 +14,20 @@ if settings.database_url.startswith("sqlite"):
     engine = create_engine(
         settings.database_url,
         future=True,
-        connect_args={"check_same_thread": False},  # Allow SQLite to be used across threads
+        connect_args={
+            "check_same_thread": False,
+            "timeout": 30,
+        },  # Allow SQLite to be used across threads and wait for locks to clear
     )
+
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        # Better concurrent read/write behavior for local dev with api + worker + beat.
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
 else:
     engine = create_engine(
         settings.database_url,
