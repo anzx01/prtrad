@@ -61,5 +61,7 @@ v1 当前输出以下状态：
 - v1 仅支持基于规则的文本分类，不引入模型推断
 - `structured_match` 当前主要作为规则类型占位，实际匹配仍以 scope + operator 为主
 - active 规则版本必须存在，否则自动分类任务会直接失败并重试
-- 当前 review task 仅创建 `open` 待办，不处理人工结论回写（留给后续包）
+- 当前 review task 在数据库中统一创建为 `pending`，历史 `open` 记录仅在兼容层归并为 `pending`
+- 当新的分类结果覆盖旧 bootstrap 结果且不再需要人工审核时，会把旧待办收敛为 `cancelled`
+- 人工结论回写仍留给后续包
 

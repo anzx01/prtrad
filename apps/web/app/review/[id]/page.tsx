@@ -2,39 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-
-interface MarketInfo {
-  id: string
-  market_id: string
-  question: string
-  description: string | null
-  market_status: string
-}
-
-interface ClassificationResult {
-  id: string
-  classification_status: string
-  primary_category_code: string | null
-  confidence: number | null
-  requires_review: boolean
-  conflict_count: number | null
-}
-
-interface ReviewTask {
-  id: string
-  market_ref_id: string
-  classification_result_id: string
-  queue_status: string
-  review_reason_code: string | null
-  priority: string
-  assigned_to: string | null
-  review_payload: Record<string, unknown> | null
-  resolved_at: string | null
-  created_at: string
-  updated_at: string
-  market: MarketInfo | null
-  classification_result: ClassificationResult | null
-}
+import type { ReviewTask } from "@/lib/review"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 

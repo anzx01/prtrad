@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db.models import KillSwitchRequest, RiskStateEvent
+from services.audit import AuditEvent
 
 
 _TYPE_TO_STATE = {
@@ -19,8 +20,13 @@ _TYPE_TO_STATE = {
 
 
 class KillSwitchService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, audit_service=None) -> None:
         self.db = db
+        if audit_service is None:
+            from services.audit import get_audit_log_service
+
+            audit_service = get_audit_log_service()
+        self.audit_service = audit_service
 
     def request_action(
         self,
@@ -40,6 +46,13 @@ class KillSwitchService:
         )
         self.db.add(request)
         self.db.flush()
+        self._write_audit(
+            request=request,
+            action="request",
+            result="pending",
+            actor_id=requested_by,
+            payload={"target_scope": target_scope, "reason": reason},
+        )
         return request
 
     def approve(
@@ -80,6 +93,18 @@ class KillSwitchService:
         )
         self.db.add(event)
         self.db.flush()
+        self._write_audit(
+            request=request,
+            action="approve",
+            result="approved",
+            actor_id=reviewer,
+            payload={
+                "target_scope": request.target_scope,
+                "request_type": request.request_type,
+                "notes": notes,
+                "to_state": target_state,
+            },
+        )
         return request
 
     def reject(
@@ -97,6 +122,17 @@ class KillSwitchService:
         request.reviewed_at = datetime.now(UTC)
         request.review_notes = notes
         self.db.flush()
+        self._write_audit(
+            request=request,
+            action="reject",
+            result="rejected",
+            actor_id=reviewer,
+            payload={
+                "target_scope": request.target_scope,
+                "request_type": request.request_type,
+                "notes": notes,
+            },
+        )
         return request
 
     def list_requests(self, status: Optional[str] = None) -> list[KillSwitchRequest]:
@@ -112,3 +148,27 @@ class KillSwitchService:
         if not request:
             raise ValueError(f"KillSwitchRequest {request_id} not found")
         return request
+
+    def _write_audit(
+        self,
+        *,
+        request: KillSwitchRequest,
+        action: str,
+        result: str,
+        actor_id: str | None,
+        payload: dict,
+    ) -> None:
+        if self.audit_service is None:
+            return
+        self.audit_service.safe_write_event(
+            AuditEvent(
+                actor_id=actor_id,
+                actor_type="user" if actor_id else "system",
+                object_type="kill_switch_request",
+                object_id=str(request.id),
+                action=action,
+                result=result,
+                event_payload=payload,
+            ),
+            session=self.db,
+        )

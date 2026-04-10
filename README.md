@@ -190,6 +190,9 @@ npm run task:tagging-run
 ### 运行测试
 
 ```bash
+# M4 风控自动化测试
+npm run test:risk
+
 # 功能验证测试
 bash test_m1_m2.sh
 

@@ -7,6 +7,7 @@
   "scripts": {
     "bootstrap": "powershell -ExecutionPolicy Bypass -File ./scripts/bootstrap.ps1",
     "dev": "concurrently -n web,api,worker,beat -c blue,green,magenta,yellow \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:worker\" \"npm run dev:beat\"",
+    "test:risk": "powershell -ExecutionPolicy Bypass -File ./scripts/test-risk.ps1",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "python -m uvicorn app.main:app --reload --app-dir apps/api --host 0.0.0.0 --port 8000",
     "dev:worker": "powershell -Command \"$env:PYTHONPATH='workers;apps/api'; .\\.venv\\Scripts\\celery.exe -A worker.celery_app:celery_app worker --loglevel INFO --pool solo\"",

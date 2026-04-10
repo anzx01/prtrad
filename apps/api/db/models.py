@@ -732,3 +732,69 @@ class RiskThresholdConfig(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
+
+
+class BacktestRun(Base):
+    __tablename__ = "backtest_runs"
+    __table_args__ = (
+        Index("ix_backtest_runs_status_created_at", "status", "created_at"),
+        Index("ix_backtest_runs_recommendation_created_at", "recommendation", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
+    recommendation: Mapped[str] = mapped_column(String(16), nullable=False, default="watch")
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    strategy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    executed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    parameters: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    summary: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class ShadowRun(Base):
+    __tablename__ = "shadow_runs"
+    __table_args__ = (
+        Index("ix_shadow_runs_recommendation_created_at", "recommendation", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    risk_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    recommendation: Mapped[str] = mapped_column(String(16), nullable=False)
+    executed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    summary: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    checklist: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
+
+
+class LaunchReview(Base):
+    __tablename__ = "launch_reviews"
+    __table_args__ = (
+        Index("ix_launch_reviews_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    stage_name: Mapped[str] = mapped_column(String(64), nullable=False, default="M6")
+    shadow_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("shadow_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    checklist: Mapped[dict | list] = mapped_column(json_type(), nullable=False)
+    evidence_summary: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
+    )
