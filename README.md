@@ -63,6 +63,12 @@ npm run dev
 - API: `http://localhost:8000`
 - API Docs: `http://localhost:8000/docs`
 
+若页面提示无法连接 API，先快速检查：
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+```
+
 ## 常用命令
 
 开发：
@@ -91,6 +97,7 @@ npm run task:market-sync
 npm run task:snapshot-sync
 npm run task:dq-run
 npm run task:tagging-run
+npm run health:dq
 ```
 
 自动化测试：
@@ -130,6 +137,28 @@ python -m pytest -q    # 全量 pytest
   - 新增 `book_fetch_failed_tokens` 指标
   - 新增 source payload 降级快照（默认开启，开关见下）
   - 新增自动化测试覆盖降级与容错
+  - `/dq` 看板新增最近一次 `market_snapshot_capture` 诊断信息，便于观察失败 token 与 fallback 使用情况
+
+### 快速健康检查
+
+- `npm run health:dq`
+  - 读取 `/dq/summary`
+  - 输出 `freshness_status`、`status_distribution`
+  - 输出最近一次快照抓取诊断：`book_fetch_failed_tokens`、`created_from_source_payload`
+
+### Calibration 页面排障记录
+
+- 若 `/calibration` 页面提示无法连接 `http://localhost:8000`：
+  - 先确认 API 进程是否还在运行：`Invoke-RestMethod http://localhost:8000/health`
+  - 再检查 Calibration 接口：`Invoke-RestMethod http://localhost:8000/calibration/units?include_inactive=true`
+- 当前已确认的本地历史库问题（2026-04-10）：
+  - 本地 SQLite 历史库的 Alembic revision 仍可能停留在 `20260404_0010`
+  - 直接执行 `npm run db:upgrade` 时，M3 迁移 `8f9a8414a637` 可能在 SQLite 上因 `tag_quality_metrics.metric_date` 的 `DATE -> DATETIME` batch cast 失败
+  - 失败后会留下部分已创建对象（例如 `calibration_units` / `netev_candidates`），但 Alembic 版本不会前进到 head
+- 当前兼容处理：
+  - 先恢复 API 进程，再访问 Calibration 页面
+  - 当前 `/calibration/units` 已可返回 `200`，但若本地没有足够历史 resolved samples，列表会为空
+  - 下一步应优先修复上述 SQLite 迁移链路，再补齐 head upgrade
 
 ### 新增配置
 
