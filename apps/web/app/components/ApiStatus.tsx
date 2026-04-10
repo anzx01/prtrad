@@ -20,8 +20,11 @@ export default function ApiStatus() {
   }
 
   useEffect(() => {
-    check()
-    const timer = setInterval(check, 300000)
+    void check()
+    const timer = setInterval(() => {
+      void check()
+    }, 300000)
+
     return () => clearInterval(timer)
   }, [])
 
@@ -42,9 +45,10 @@ export default function ApiStatus() {
       <span className={`inline-block h-2 w-2 rounded-full ${dot[status]}`} />
       {label[status]}
       <button
-        onClick={check}
-        className="ml-1 text-slate-500 hover:text-slate-300 transition-colors"
-        title="刷新连接状态"
+        onClick={() => void check()}
+        className="ml-1 text-slate-500 transition-colors hover:text-slate-300"
+        title="Refresh API status"
+        aria-label="Refresh API status"
       >
         ↻
       </button>

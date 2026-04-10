@@ -18,6 +18,13 @@ def _get_float(name: str, default: float) -> float:
     return float(raw) if raw is not None and raw != "" else default
 
 
+def _get_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class WorkerSettings:
     app_env = os.getenv("APP_ENV", "development")
     app_name = os.getenv("APP_NAME", "polymarket-tail-risk")
@@ -38,9 +45,10 @@ class WorkerSettings:
     polymarket_clob_api_url = os.getenv(
         "POLYMARKET_CLOB_API_URL", "https://clob.polymarket.com"
     )
-    ingest_http_timeout_seconds = _get_int("INGEST_HTTP_TIMEOUT_SECONDS", 15)
+    ingest_http_timeout_seconds = _get_int("INGEST_HTTP_TIMEOUT_SECONDS", 20)
     ingest_gamma_page_size = _get_int("INGEST_GAMMA_PAGE_SIZE", 100)
-    ingest_clob_batch_size = _get_int("INGEST_CLOB_BATCH_SIZE", 100)
+    ingest_clob_batch_size = _get_int("INGEST_CLOB_BATCH_SIZE", 25)
+    ingest_allow_source_payload_fallback = _get_bool("INGEST_ALLOW_SOURCE_PAYLOAD_FALLBACK", True)
     ingest_market_sync_interval_seconds = _get_int("INGEST_MARKET_SYNC_INTERVAL_SECONDS", 900)
     ingest_snapshot_interval_seconds = _get_int("INGEST_SNAPSHOT_INTERVAL_SECONDS", 60)
     ingest_snapshot_target_size = _get_float("INGEST_SNAPSHOT_TARGET_SIZE", 100.0)

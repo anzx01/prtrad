@@ -9,7 +9,7 @@ const navCards = [
   },
   {
     title: "Data Quality",
-    body: "Monitor data quality check results across markets — pass/warn/fail distribution and recent check history.",
+    body: "Monitor data quality check results across markets - pass/warn/fail distribution and recent check history.",
     href: "/dq",
     cta: "View DQ Dashboard",
   },
@@ -45,7 +45,7 @@ const navCards = [
   },
   {
     title: "Reports",
-    body: "Generate and view M2 milestone reports with approval rates, rejection codes, and SLA metrics.",
+    body: "Generate daily summaries, weekly summaries, and stage review reports backed by audit records.",
     href: "/reports",
     cta: "View Reports",
   },
@@ -67,6 +67,24 @@ const navCards = [
     href: "/risk",
     cta: "View Risk",
   },
+  {
+    title: "State & Alerts",
+    body: "Track the current state machine, alert timeline, pending kill-switch requests, and breached clusters.",
+    href: "/state-alerts",
+    cta: "View Alerts",
+  },
+  {
+    title: "Backtest Lab",
+    body: "Run lightweight research replays with structured summaries, stress tests, and Go/Watch/NoGo outputs.",
+    href: "/backtests",
+    cta: "View Backtests",
+  },
+  {
+    title: "Launch Review",
+    body: "Execute shadow runs, package checklist evidence, and record Go/NoGo launch decisions.",
+    href: "/launch-review",
+    cta: "View Launch Review",
+  },
 ];
 
 export default function HomePage() {
@@ -78,7 +96,7 @@ export default function HomePage() {
         </h1>
         <p className="max-w-3xl text-base leading-7 text-slate-300 sm:text-lg">
           Market ingestion, data quality, tagging, calibration, risk controls,
-          and auditability — all in one place.
+          and auditability - all in one place.
         </p>
       </header>
 
@@ -96,7 +114,7 @@ export default function HomePage() {
               href={card.href}
               className="mt-6 inline-flex w-fit rounded-full border border-sky-400/40 bg-sky-500/10 px-4 py-1.5 text-sm text-sky-200 hover:bg-sky-500/20 transition-colors"
             >
-              {card.cta} →
+              {card.cta} {"->"}
             </Link>
           </article>
         ))}
@@ -107,7 +125,8 @@ export default function HomePage() {
           <div className="space-y-3">
             <h2 className="text-2xl font-medium text-white">Local endpoints</h2>
             <p className="text-sm text-slate-300">
-              The API server must be running for the business pages to load live data.
+              The API server must be running for the business pages to load live
+              data.
             </p>
           </div>
           <div className="rounded-2xl border border-sky-300/20 bg-sky-500/10 p-5 text-sm text-sky-100 space-y-1">

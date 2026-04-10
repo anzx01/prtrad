@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from db.session import get_db
@@ -16,6 +16,8 @@ router = APIRouter(prefix="/calibration", tags=["calibration"])
 
 
 class CalibrationUnitSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     price_bucket: str
     category_code: str
@@ -29,9 +31,6 @@ class CalibrationUnitSchema(BaseModel):
     is_active: bool
     disabled_reason: str | None = None
     computed_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class CalibrationComputeRequest(BaseModel):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -13,12 +14,14 @@ from db.models import Market, MarketSnapshot
 from db.session import session_scope
 from services.ingest.contracts import NormalizedMarketRecord
 from services.ingest.polymarket_client import (
+    PolymarketApiError,
     PolymarketClobClient,
     PolymarketGammaClient,
 )
 
 
 ACTIVE_MARKET_STATUSES = ("active_accepting_orders", "active_open", "active_paused")
+logger = logging.getLogger("ptr.ingest.service")
 
 
 def _ensure_utc_datetime(value: datetime | None) -> datetime | None:
@@ -210,6 +213,16 @@ def _cumulative_target_depth(levels: list[dict[str, Any]], target_size: Decimal)
     return cumulative
 
 
+def _clamp_probability(value: Decimal | None) -> Decimal | None:
+    if value is None:
+        return None
+    if value < Decimal("0"):
+        return Decimal("0")
+    if value > Decimal("1"):
+        return Decimal("1")
+    return value
+
+
 def _resolve_binary_tokens(outcomes: list[str] | None, token_ids: list[str] | None) -> tuple[str, str] | None:
     """解析二元市场的 YES/NO token。
 
@@ -373,6 +386,8 @@ class PolymarketIngestService:
             "skipped_existing": 0,
             "skipped_missing_mapping": 0,
             "skipped_missing_order_books": 0,
+            "book_fetch_failed_tokens": 0,
+            "created_from_source_payload": 0,
         }
         target_size = Decimal(str(self._settings.ingest_snapshot_target_size))
 
@@ -413,7 +428,8 @@ class PolymarketIngestService:
                 token_ids.extend(mapping)
 
             token_ids = list(dict.fromkeys(token_ids))
-            books = self._fetch_books(token_ids)
+            books, failed_tokens = self._fetch_books(token_ids)
+            stats["book_fetch_failed_tokens"] = failed_tokens
             books_by_token = {str(book.get("asset_id")): book for book in books if book.get("asset_id")}
 
             for market in markets:
@@ -429,6 +445,17 @@ class PolymarketIngestService:
                 yes_book = books_by_token.get(yes_token)
                 no_book = books_by_token.get(no_token)
                 if yes_book is None or no_book is None:
+                    if self._settings.ingest_allow_source_payload_fallback:
+                        fallback_snapshot = self._build_snapshot_from_source_payload(
+                            market=market,
+                            triggered_at=triggered_at,
+                            target_size=target_size,
+                        )
+                        if fallback_snapshot is not None:
+                            session.add(fallback_snapshot)
+                            stats["created"] += 1
+                            stats["created_from_source_payload"] += 1
+                            continue
                     stats["skipped_missing_order_books"] += 1
                     continue
 
@@ -438,10 +465,7 @@ class PolymarketIngestService:
                     no_book.get("asks", []), no_ask
                 )
 
-                payload = _coerce_payload_dict(market.source_payload).get("market", {})
-                traded_volume = payload.get("volume_24hr_clob")
-                if traded_volume in (None, ""):
-                    traded_volume = payload.get("volume_clob")
+                payload = self._market_payload(market)
 
                 session.add(
                     MarketSnapshot(
@@ -459,7 +483,7 @@ class PolymarketIngestService:
                             target_size,
                         ),
                         trade_count=None,
-                        traded_volume=_decimal_or_none(traded_volume),
+                        traded_volume=self._resolve_traded_volume(payload),
                         last_trade_age_seconds=None,
                     )
                 )
@@ -467,14 +491,109 @@ class PolymarketIngestService:
 
         return stats
 
-    def _fetch_books(self, token_ids: list[str]) -> list[dict[str, Any]]:
+    def _fetch_books(self, token_ids: list[str]) -> tuple[list[dict[str, Any]], int]:
         if not token_ids:
-            return []
+            return [], 0
         books: list[dict[str, Any]] = []
+        failed_tokens = 0
         batch_size = max(1, self._settings.ingest_clob_batch_size)
         for index in range(0, len(token_ids), batch_size):
-            books.extend(self._clob_client.get_order_books(token_ids[index : index + batch_size]))
-        return books
+            batch_token_ids = token_ids[index : index + batch_size]
+            if self._settings.ingest_allow_source_payload_fallback:
+                try:
+                    batch_books = self._clob_client.get_order_books(batch_token_ids)
+                    batch_failed = 0
+                except PolymarketApiError as exc:
+                    logger.warning(
+                        "snapshot orderbook fetch batch failed size=%s reason=%s",
+                        len(batch_token_ids),
+                        str(exc),
+                    )
+                    batch_books = []
+                    batch_failed = len(batch_token_ids)
+            else:
+                batch_books, batch_failed = self._fetch_books_resilient(batch_token_ids)
+            books.extend(batch_books)
+            failed_tokens += batch_failed
+        return books, failed_tokens
+
+    def _fetch_books_resilient(self, token_ids: list[str]) -> tuple[list[dict[str, Any]], int]:
+        try:
+            return self._clob_client.get_order_books(token_ids), 0
+        except PolymarketApiError as exc:
+            # Split a failed batch to avoid one transient network timeout blocking the whole snapshot run.
+            if len(token_ids) == 1:
+                logger.warning(
+                    "snapshot orderbook fetch failed token=%s reason=%s",
+                    token_ids[0],
+                    str(exc),
+                )
+                return [], 1
+
+            mid = len(token_ids) // 2
+            left_books, left_failed = self._fetch_books_resilient(token_ids[:mid])
+            right_books, right_failed = self._fetch_books_resilient(token_ids[mid:])
+            return left_books + right_books, left_failed + right_failed
+
+    @staticmethod
+    def _market_payload(market: Market) -> dict[str, Any]:
+        payload = _coerce_payload_dict(market.source_payload)
+        return _coerce_payload_dict(payload.get("market"))
+
+    @staticmethod
+    def _resolve_traded_volume(payload: dict[str, Any]) -> Decimal | None:
+        traded_volume = payload.get("volume_24hr_clob")
+        if traded_volume in (None, ""):
+            traded_volume = payload.get("volume_clob")
+        return _decimal_or_none(traded_volume)
+
+    def _build_snapshot_from_source_payload(
+        self,
+        *,
+        market: Market,
+        triggered_at: datetime,
+        target_size: Decimal,
+    ) -> MarketSnapshot | None:
+        payload = self._market_payload(market)
+
+        best_bid_yes = _clamp_probability(_decimal_or_none(payload.get("best_bid")))
+        best_ask_yes = _clamp_probability(_decimal_or_none(payload.get("best_ask")))
+        if best_bid_yes is None or best_ask_yes is None or best_bid_yes > best_ask_yes:
+            return None
+
+        best_bid_no = _clamp_probability(Decimal("1") - best_ask_yes)
+        best_ask_no = _clamp_probability(Decimal("1") - best_bid_yes)
+        if best_bid_no is None or best_ask_no is None:
+            return None
+
+        spread = _decimal_or_none(payload.get("spread"))
+        if spread is None:
+            spread = best_ask_no - best_bid_no
+        if spread < 0:
+            spread = Decimal("0")
+
+        liquidity = _decimal_or_none(payload.get("liquidity_clob")) or Decimal("0")
+        if liquidity < 0:
+            liquidity = Decimal("0")
+
+        last_trade_yes = _clamp_probability(_decimal_or_none(payload.get("last_trade_price")))
+        last_trade_price_no = _clamp_probability(Decimal("1") - last_trade_yes) if last_trade_yes is not None else None
+
+        return MarketSnapshot(
+            market_ref_id=market.id,
+            snapshot_time=triggered_at,
+            best_bid_no=best_bid_no,
+            best_ask_no=best_ask_no,
+            best_bid_yes=best_bid_yes,
+            best_ask_yes=best_ask_yes,
+            last_trade_price_no=last_trade_price_no,
+            spread=spread,
+            top_of_book_depth=liquidity,
+            cumulative_depth_at_target_size=min(liquidity, target_size),
+            trade_count=None,
+            traded_volume=self._resolve_traded_volume(payload),
+            last_trade_age_seconds=None,
+        )
 
     @staticmethod
     def _build_market_model(record: NormalizedMarketRecord) -> Market:

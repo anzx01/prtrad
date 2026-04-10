@@ -10,6 +10,18 @@ export interface ApiError {
   details?: string
 }
 
+export class ApiRequestError extends Error implements ApiError {
+  status: number
+  details?: string
+
+  constructor({ status, message, details }: ApiError) {
+    super(message)
+    this.name = "ApiRequestError"
+    this.status = status
+    this.details = details
+  }
+}
+
 function isApiError(value: unknown): value is ApiError {
   if (!value || typeof value !== "object") {
     return false
@@ -17,6 +29,17 @@ function isApiError(value: unknown): value is ApiError {
 
   const candidate = value as Partial<ApiError>
   return typeof candidate.status === "number" && typeof candidate.message === "string"
+}
+
+function buildNetworkError(url: string, error: unknown): ApiRequestError {
+  const details =
+    error instanceof Error ? error.message : typeof error === "string" ? error : String(error)
+
+  return new ApiRequestError({
+    status: 0,
+    message: `Unable to reach API server at ${API_URL}. Make sure the API is running and that CORS allows the current web origin.`,
+    details: `${url} :: ${details}`,
+  })
 }
 
 export async function apiGet<T>(endpoint: string): Promise<T> {
@@ -27,7 +50,7 @@ export async function apiGet<T>(endpoint: string): Promise<T> {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        Accept: "application/json",
       },
     })
 
@@ -42,19 +65,18 @@ export async function apiGet<T>(endpoint: string): Promise<T> {
       } catch {
         // Ignore JSON parse errors
       }
-      throw error
+      throw new ApiRequestError(error)
     }
 
     return await response.json()
   } catch (error) {
-    if (isApiError(error)) {
+    if (error instanceof ApiRequestError) {
       throw error
     }
-    throw {
-      status: 0,
-      message: error instanceof Error ? error.message : "Unknown error",
-      details: String(error),
-    } as ApiError
+    if (isApiError(error)) {
+      throw new ApiRequestError(error)
+    }
+    throw buildNetworkError(url, error)
   }
 }
 
@@ -66,6 +88,7 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
     const response = await fetch(url, {
       method: "POST",
       headers: {
+        Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -82,18 +105,17 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
       } catch {
         // Ignore JSON parse errors
       }
-      throw error
+      throw new ApiRequestError(error)
     }
 
     return await response.json()
   } catch (error) {
-    if (isApiError(error)) {
+    if (error instanceof ApiRequestError) {
       throw error
     }
-    throw {
-      status: 0,
-      message: error instanceof Error ? error.message : "Unknown error",
-      details: String(error),
-    } as ApiError
+    if (isApiError(error)) {
+      throw new ApiRequestError(error)
+    }
+    throw buildNetworkError(url, error)
   }
 }

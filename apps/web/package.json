@@ -2,7 +2,9 @@
   "name": "@ptr/web",
   "private": true,
   "scripts": {
-    "dev": "next dev"
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "^15.3.1",

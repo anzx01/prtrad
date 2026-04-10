@@ -71,6 +71,20 @@ celery_app.conf.update(
             if settings.review_task_generation_interval_seconds > 0
             else {}
         ),
+        "generate-daily-summary-report": {
+            "task": "reports.generate_daily_summary",
+            "schedule": crontab(hour="8", minute="0"),
+        },
+        **(
+            {
+                "generate-weekly-summary-report": {
+                    "task": "reports.generate_weekly_report",
+                    "schedule": timedelta(seconds=settings.reports_generation_interval_seconds),
+                }
+            }
+            if settings.reports_generation_interval_seconds > 0
+            else {}
+        ),
     },
     beat_scheduler="celery.beat.PersistentScheduler",
     beat_schedule_filename=settings.celery_beat_schedule_db,

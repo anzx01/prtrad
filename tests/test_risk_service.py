@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy import select
 
-from db.models import Market, MarketClassificationResult, NetEVCandidate, RiskStateEvent
+from db.models import AuditLog, Market, MarketClassificationResult, NetEVCandidate, RiskStateEvent
 from services.risk.kill_switch import KillSwitchService
 from services.risk.service import RiskService
 
@@ -321,4 +321,48 @@ def test_cluster_threshold_override_takes_precedence_over_global(test_db):
     assert float(exposures[0].limit_value) == 5.0
     assert exposures[0].is_breached is True
 
+    session.close()
+
+
+def test_threshold_upsert_writes_audit_log(test_db):
+    session = test_db()
+    service = RiskService(session)
+
+    threshold = service.upsert_threshold(
+        cluster_code="global",
+        metric_name="max_exposure",
+        threshold_value=Decimal("14.000000"),
+        created_by="risk_ops",
+    )
+
+    audit_event = session.scalar(
+        select(AuditLog)
+        .where(AuditLog.object_type == "risk_threshold")
+        .where(AuditLog.object_id == str(threshold.id))
+    )
+    assert audit_event is not None
+    assert audit_event.action == "upsert"
+    session.close()
+
+
+def test_kill_switch_request_writes_audit_log(test_db):
+    session = test_db()
+    service = KillSwitchService(session)
+
+    request = service.request_action(
+        request_type="freeze",
+        target_scope="global",
+        requested_by="ops_a",
+        reason="Manual freeze for investigation",
+    )
+    service.approve(request.id, reviewer="lead_reviewer", notes="Approved")
+
+    audit_events = list(
+        session.scalars(
+            select(AuditLog)
+            .where(AuditLog.object_type == "kill_switch_request")
+            .order_by(AuditLog.created_at.asc())
+        ).all()
+    )
+    assert [event.action for event in audit_events] == ["request", "approve"]
     session.close()
