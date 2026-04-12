@@ -57,9 +57,17 @@
   - 队列页补充“全选当前筛选 N 条”与“一键开始审核已选 / 一键通过已选 / 一键拒绝已选”
   - 后端新增 `/review/bulk-action` 批量审核接口
   - `pending/open` 任务在批量通过或拒绝时可自动领取为 `in_progress` 再完成审核
+- 修复前端 hydration mismatch：
+  - 定位到导航 `ApiStatus` 刷新按钮容易被浏览器扩展/翻译注入属性，导致服务端与客户端首屏不一致
+  - 将刷新按钮从纯文本字符改为稳定 SVG 图标
+  - 为按钮增加 `suppressHydrationWarning` 与 `translate="no"`
+  - 同步清理 `ApiStatus` 组件中文乱码
 - 重写并清理文档乱码：
   - `README.md`
   - `docs/dev-progress.md`
+- README 进一步补充：
+  - `/reports` 报表工作台的阅读方式与门槛解释
+  - `/review` 审核工作台的单条/批量操作说明
 
 ### 当前状态
 
@@ -74,8 +82,8 @@
 - `python -m pytest tests/integration/test_api_review.py -q` -> `7 passed`
 - `Invoke-WebRequest http://localhost:3000` -> `200`
 - `Invoke-WebRequest http://localhost:3000/reports` -> `200`
-- `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
-- `npm run build:web` -> `passed`
+- `apps/web/app/review/page.tsx`、`apps/web/app/components/ApiStatus.tsx`、`README.md`、`docs/dev-progress.md` 已按 UTF-8 字节读取复核
+- 最新一次 `npm run build:web` 在 Windows 下被 `apps/web/.next/trace` 文件锁阻塞，报 `EPERM`；当前 `tsc` 通过，说明本次代码改动本身未引入 TypeScript 编译错误
 - 首页自动汇总数据基于本地实际 API 返回，而不是写死样例。
 
 ### 关键判断
