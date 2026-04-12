@@ -1,5 +1,69 @@
 # 开发进度
 
+## 2026-04-13
+
+### 今日完成
+
+- 继续收口昨天未完成的“先判断、再操作”页面改造：
+  - `/risk` 新增系统判断层，补齐“当前优先事项”“系统建议先看这里”“当前最该解释的越限簇 / 接近门槛簇”。
+  - `/launch-review` 新增 Go/NoGo 判断层，补齐“当前判断”“系统建议先看这里”“当前 Go 阻塞项”。
+- `/launch-review` 页面完成进一步拆分，降低页级复杂度：
+  - 新增 `types.ts`
+  - 新增 `constants.ts`
+  - 新增 `insights.ts`
+  - 新增 `summary-panels.tsx`
+  - 新增 `record-panels.tsx`
+  - 新增 `forms-section.tsx`
+- `/launch-review` 交互与文案继续收口：
+  - checklist 英文化标签统一补充为中文业务解释，避免用户看到 `Latest backtest recommendation is go/watch` 这类原始语句还要自己翻译。
+  - 阶段评审证据的 `report_type=stage_review:M4/M5/M6` 统一解释为中文阶段评审标题，避免原始持久化值直接暴露到界面。
+  - Go 被阻止时，反馈会直接展示中文化的门槛缺口，而不是只显示原始 checklist label。
+- `/risk` 页面继续结构整理：
+  - 风险判断逻辑抽到 `apps/web/app/risk/insights.ts`
+  - 初始化表单状态与错误解析抽回 `constants.ts`
+  - `page.tsx` 控制在 300 行附近，降低继续扩展时的维护压力
+- 自动化脚本补齐统一入口：
+  - 新增 `scripts/refresh-evidence-pack.ps1`
+  - 新增 `npm run task:refresh-evidence-pack`
+  - 脚本与首页一键证据包动作保持同一顺序：重算风险暴露 -> 重算长窗口校准 -> 回测 -> shadow -> 日报 -> 周报 -> `M4/M5/M6` 阶段评审
+  - 为脚本补齐日志文件落盘到 `logs/`
+  - 为兼容 Windows PowerShell 5.1 与仓库 UTF-8 无 BOM 约束，脚本文案使用 ASCII，避免中文脚本在 `powershell -File` 下被错误按本地代码页解析
+- README 同步补充一键证据包脚本入口，以及 `/risk`、`/launch-review` 两个工作台的最新使用方式说明。
+
+### 当前状态
+
+- `/risk` 已不再只是暴露表和阈值表堆叠，而是会先告诉用户“该先处理 kill-switch、越限簇，还是只是例行观察”。
+- `/launch-review` 已不再只靠用户自己读 checklist 推断能不能 Go，而是会先给出当前判断、阻塞项和下一步动作。
+- 首页一键证据包的自动化链路现在已有 `scripts/` 层统一入口，后续可脱离前端直接执行。
+- README 已同步到当前产品形态，能直接说明这两页为什么要先判断、再操作。
+
+### 验证结果
+
+- `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\refresh-evidence-pack.ps1 -DryRun` -> `passed`
+- `Invoke-WebRequest http://localhost:3000/risk` -> `200`
+- `Invoke-WebRequest http://localhost:3000/launch-review` -> `200`
+
+### 关键判断
+
+- 当前用户成本最大的点，已经不只是“功能有没有”，而是“系统能不能先把当前结论说清楚”。这次改动继续把这层解释前移到页面本身。
+- `/launch-review` 原先最容易造成误判的，不是按钮能不能点，而是 checklist 与证据摘要过于原始；中文化和判断层补齐后，这类误解会明显下降。
+- 首页自动化动作如果只存在前端按钮里，仍然不够稳定；补齐 `scripts/refresh-evidence-pack.ps1` 后，重复执行链路终于有了统一脚本入口。
+
+### 明日优先级
+
+1. 继续检查还有哪些页面仍然是“字段已经有了，但系统没有先给结论”，优先考虑：
+   - `/state-alerts`
+   - `/calibration`
+2. 评估是否要继续把首页单步自动化动作也逐步沉淀到 `scripts/`，而不只是一键证据包。
+3. 看是否需要处理 `apps/web/tsconfig.tsbuildinfo` 这类验证过程中产生的跟踪文件噪音。
+
+### 风险与备注
+
+- 当前工作树仍是脏的，已继续避免回滚其他已有改动。
+- `apps/web/tsconfig.tsbuildinfo` 在本次 `tsc` 验证后发生更新，这是当前验证命令带出的跟踪文件变更，不影响业务代码本身。
+- `scripts/refresh-evidence-pack.ps1` 当前已做 `DryRun` 自检；真实执行仍依赖本地 API 服务可用。
+
 ## 2026-04-12
 
 ### 今日完成

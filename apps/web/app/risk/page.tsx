@@ -9,9 +9,14 @@ import {
   DEFAULT_THRESHOLD_VALUES,
   formatRiskStateLabel,
   formatThresholdMetricLabel,
+  getRiskErrorMessage,
+  INITIAL_KILL_SWITCH_FORM,
+  INITIAL_THRESHOLD_FORM,
 } from "./constants"
+import { buildRiskInsights } from "./insights"
 import {
   RiskPageHeader,
+  RiskPrioritySection,
   RiskStatePanel,
   RiskSummaryGrid,
 } from "./overview"
@@ -36,33 +41,6 @@ import type {
   ThresholdItem,
   ThresholdMetric,
 } from "./types"
-
-const INITIAL_KILL_SWITCH_FORM: KillSwitchFormState = {
-  request_type: "risk_off",
-  target_scope: "global",
-  requested_by: "",
-  reason: "",
-}
-
-const INITIAL_THRESHOLD_FORM: ThresholdFormState = {
-  cluster_code: "global",
-  metric_name: "max_exposure",
-  threshold_value: DEFAULT_THRESHOLD_VALUES.max_exposure,
-  created_by: "",
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === "string") {
-      return message
-    }
-  }
-  return "发生了未知错误，请稍后重试"
-}
 
 export default function RiskPage() {
   const [riskState, setRiskState] = useState<RiskStateData | null>(null)
@@ -94,7 +72,7 @@ export default function RiskPage() {
       setKillSwitchRequests(requestData.requests)
       setError(null)
     } catch (fetchError) {
-      setError(getErrorMessage(fetchError))
+      setError(getRiskErrorMessage(fetchError))
     } finally {
       setLoading(false)
     }
@@ -119,7 +97,7 @@ export default function RiskPage() {
       await apiPost("/risk/exposures/compute")
       await fetchAll()
     } catch (computeError) {
-      setError(getErrorMessage(computeError))
+      setError(getRiskErrorMessage(computeError))
     } finally {
       setComputing(false)
     }
@@ -138,7 +116,7 @@ export default function RiskPage() {
       setKillSwitchForm(INITIAL_KILL_SWITCH_FORM)
       await fetchAll()
     } catch (submitError) {
-      setError(getErrorMessage(submitError))
+      setError(getRiskErrorMessage(submitError))
     } finally {
       setSubmitting(false)
     }
@@ -156,7 +134,7 @@ export default function RiskPage() {
       await apiPost(`/risk/kill-switch/${id}/${action}`, { reviewer, notes })
       await fetchAll()
     } catch (reviewError) {
-      setError(getErrorMessage(reviewError))
+      setError(getRiskErrorMessage(reviewError))
     }
   }
 
@@ -197,7 +175,7 @@ export default function RiskPage() {
       }))
       await fetchAll()
     } catch (submitError) {
-      setError(getErrorMessage(submitError))
+      setError(getRiskErrorMessage(submitError))
     } finally {
       setSavingThreshold(false)
     }
@@ -217,7 +195,7 @@ export default function RiskPage() {
       await apiPost(`/risk/thresholds/${threshold.id}/deactivate`)
       await fetchAll()
     } catch (deactivateError) {
-      setError(getErrorMessage(deactivateError))
+      setError(getRiskErrorMessage(deactivateError))
     } finally {
       setDeactivatingThresholdId(null)
     }
@@ -234,20 +212,12 @@ export default function RiskPage() {
   const breachedClusters = exposures.filter((exposure) => exposure.is_breached)
   const pendingCount = pendingRequests.length
   const breachedCount = breachedClusters.length
-  const actionTone =
-    currentState === "RiskOff" || currentState === "Frozen"
-      ? "danger"
-      : pendingCount > 0 || breachedCount > 0 || currentState === "Caution"
-        ? "warning"
-        : "safe"
-  const actionSummary =
-    currentState === "RiskOff" || currentState === "Frozen"
-      ? `系统当前处于${currentStateLabel}，请优先确认人工处置是否完成，再决定是否恢复自动链路。`
-      : pendingCount > 0
-        ? `当前有 ${pendingCount} 个 kill-switch 请求待审批，先处理人工动作，再继续看暴露和阈值。`
-        : breachedCount > 0
-          ? `当前有 ${breachedCount} 个簇越限，先核对暴露与阈值，再决定是否需要提交 kill-switch。`
-          : "当前没有待审批请求，也没有簇越限，可继续按常规节奏观察。"
+  const insights = buildRiskInsights({
+    riskState,
+    exposures,
+    thresholds,
+    killSwitchRequests,
+  })
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-5 md:px-6">
@@ -275,7 +245,13 @@ export default function RiskPage() {
         ]}
       />
 
-      <RiskPageHeader computing={computing} onCompute={handleCompute} summary={actionSummary} tone={actionTone} />
+      <RiskPageHeader
+        computing={computing}
+        onCompute={handleCompute}
+        title={insights.headline.title}
+        summary={insights.headline.description}
+        tone={insights.headline.tone}
+      />
 
       {error && (
         <div className="mb-6 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -289,6 +265,8 @@ export default function RiskPage() {
         breachedCount={breachedCount}
         pendingCount={pendingCount}
       />
+
+      <RiskPrioritySection priorities={insights.priorities} spotlight={insights.spotlight} />
 
       <RiskStatePanel currentState={currentState} latestEvent={riskState?.history[0]} />
 

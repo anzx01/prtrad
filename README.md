@@ -98,6 +98,7 @@ npm run task:market-sync
 npm run task:snapshot-sync
 npm run task:dq-run
 npm run task:tagging-run
+npm run task:refresh-evidence-pack
 npm run health:dq
 ```
 
@@ -123,10 +124,10 @@ python -m pytest -q
 - `/reports`：日报、周报、阶段评审智能速读
 - `/calibration`：校准单元
 - `/netev`：NetEV 准入
-- `/risk`：组合风控
+- `/risk`：组合风控（先给判断，再看暴露 / Kill-switch / 阈值）
 - `/state-alerts`：状态与告警
 - `/backtests`：回测实验室
-- `/launch-review`：影子运行与上线评审
+- `/launch-review`：影子运行与上线评审（先给 Go/NoGo 判断，再进入评审操作）
 
 ## 智能驾驶舱首页
 
@@ -168,6 +169,8 @@ python -m pytest -q
 - 自动化动作按顺序串行执行，避免并发写库
 - 遇到 SQLite 偶发 `database is locked` 时，会做有限次短重试
 - 审核队列这类必须人工处理的事情不会被假装自动化，首页会明确标记这是当前人工瓶颈
+- 如需脱离前端直接执行同一套证据刷新链路，可运行 `npm run task:refresh-evidence-pack`
+- 脚本执行日志会写入 `logs/refresh-evidence-pack-*.log`
 
 ## 报表工作台
 
@@ -203,6 +206,40 @@ python -m pytest -q
 
 - 批量通过或拒绝时，系统会自动把 `pending/open` 任务转成 `in_progress` 再完成审核
 - 页面会直接显示已选数量与当前筛选覆盖范围，减少“到底批了哪些”的不确定感
+
+## 组合风控工作台
+
+`/risk` 不再只是暴露表和阈值表堆叠，而是先告诉用户当前该先处理什么。
+
+当前页面结构：
+
+- 顶部“当前优先事项”：先判断现在更像是风险阻断、人工待办，还是例行观察
+- “系统建议先看这里”：把最值得先处理的风险项排出顺序
+- “当前最该解释的越限簇 / 接近门槛簇”：把注意力集中到真正需要解释的少数簇
+- 保留暴露明细、阈值维护、状态历史、Kill-switch 审批等操作区
+
+适合处理的问题：
+
+- 当前该先处理 Kill-switch、越限簇，还是只是继续观察
+- 风险状态为什么进入 `Caution / RiskOff / Frozen`
+- 暴露和阈值很多时，到底该先解释哪几个簇
+
+## 上线评审工作台
+
+`/launch-review` 不再要求用户自己从 checklist 和证据摘要里拼 Go/NoGo 结论，而是先给当前判断，再进入 shadow 与 review 操作。
+
+当前页面结构：
+
+- 顶部“当前判断”：先说明现在是该先跑 shadow、补证据，还是已经可以进入最终决策
+- “系统建议先看这里”：按 pending review、未过 checklist、shadow 阻断项排序
+- “当前 Go 阻塞项”：直接展示还没过的门槛，而不是只露出原始 checklist label
+- 下方保留 shadow 运行、创建评审、历史记录和 Go/NoGo 决策区
+
+适合处理的问题：
+
+- Go 按钮为什么当前不能点
+- checklist 英文标签或持久化字段分别代表什么业务门槛
+- 现在该先跑 shadow、补 backtest/report，还是记录最终决策
 
 ## 最近排障要点
 

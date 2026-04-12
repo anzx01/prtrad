@@ -2,65 +2,8 @@
 
 import { ConsoleBadge, ConsoleInset, ConsolePanel } from "../components/console-ui"
 import { formatRiskStateLabel } from "../risk/constants"
-
-export interface LinkedEvidence {
-  id: string
-  run_name?: string
-  report_type?: string
-  created_at?: string
-  window_end?: string
-  generated_at?: string
-  recommendation?: string
-  risk_state?: string
-  decision?: string
-  report_period_end?: string
-}
-
-export interface LaunchEvidenceSummary {
-  latest_backtest?: LinkedEvidence | null
-  latest_shadow_run?: LinkedEvidence | null
-  latest_stage_review?: LinkedEvidence | null
-}
-
-function formatRecommendation(value?: string | null) {
-  switch (value?.toLowerCase()) {
-    case "go":
-      return "Go，可继续"
-    case "watch":
-      return "观察"
-    case "block":
-    case "nogo":
-      return "阻断"
-    default:
-      return "-"
-  }
-}
-
-function formatDecision(value?: string | null) {
-  switch (value?.toLowerCase()) {
-    case "go":
-      return "Go，可进入上线决策"
-    case "nogo":
-      return "NoGo，暂不上线"
-    case "pending":
-      return "待决策"
-    default:
-      return value ?? "-"
-  }
-}
-
-function formatReportType(value?: string | null) {
-  switch (value) {
-    case "daily_summary":
-      return "日报"
-    case "weekly_summary":
-      return "周报"
-    case "stage_review":
-      return "阶段评审"
-    default:
-      return value ?? "尚未关联阶段评审"
-  }
-}
+import { formatDecisionLabel, formatEvidenceRecommendation, formatReportTypeLabel } from "./constants"
+import type { LaunchEvidenceSummary } from "./types"
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -112,7 +55,7 @@ export function LaunchEvidenceSection({ evidence }: { evidence: LaunchEvidenceSu
           lines={
             backtest
               ? [
-                  `建议：${formatRecommendation(backtest?.recommendation)}`,
+                  `建议：${formatEvidenceRecommendation(backtest?.recommendation)}`,
                   `生成时间：${formatDate(backtest?.created_at)}`,
                   `回看区间结束：${formatDate(backtest?.window_end)}`,
                 ]
@@ -125,7 +68,7 @@ export function LaunchEvidenceSection({ evidence }: { evidence: LaunchEvidenceSu
           lines={
             shadow
               ? [
-                  `建议：${formatRecommendation(shadow?.recommendation)}`,
+                  `建议：${formatEvidenceRecommendation(shadow?.recommendation)}`,
                   `运行时风险状态：${shadow?.risk_state ? formatRiskStateLabel(shadow.risk_state) : "-"}`,
                   `生成时间：${formatDate(shadow?.created_at)}`,
                 ]
@@ -133,12 +76,12 @@ export function LaunchEvidenceSection({ evidence }: { evidence: LaunchEvidenceSu
           }
         />
         <EvidenceCard
-          title={formatReportType(stageReview?.report_type)}
+          title={formatReportTypeLabel(stageReview?.report_type)}
           subtitle="最近一次阶段评审证据"
           lines={
             stageReview
               ? [
-                  `结论：${formatDecision(stageReview?.decision)}`,
+                  `结论：${formatDecisionLabel(stageReview?.decision)}`,
                   `生成时间：${formatDate(stageReview?.generated_at)}`,
                   `报告周期结束：${formatDate(stageReview?.report_period_end)}`,
                 ]

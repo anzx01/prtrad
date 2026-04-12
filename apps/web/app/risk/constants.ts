@@ -1,4 +1,4 @@
-import type { ThresholdMetric } from "./types"
+import type { KillSwitchFormState, ThresholdFormState, ThresholdMetric } from "./types"
 
 export const STATE_COLORS: Record<string, string> = {
   Normal: "text-emerald-300",
@@ -53,6 +53,20 @@ export const DEFAULT_THRESHOLD_VALUES: Record<ThresholdMetric, string> = {
   max_positions: "50",
 }
 
+export const INITIAL_KILL_SWITCH_FORM: KillSwitchFormState = {
+  request_type: "risk_off",
+  target_scope: "global",
+  requested_by: "",
+  reason: "",
+}
+
+export const INITIAL_THRESHOLD_FORM: ThresholdFormState = {
+  cluster_code: "global",
+  metric_name: "max_exposure",
+  threshold_value: DEFAULT_THRESHOLD_VALUES.max_exposure,
+  created_by: "",
+}
+
 export const THRESHOLD_METRIC_OPTIONS: ThresholdMetric[] = [
   "max_exposure",
   "max_positions",
@@ -74,4 +88,17 @@ export function formatReviewStatusLabel(value: string): string {
 
 export function formatThresholdMetricLabel(value: ThresholdMetric | string): string {
   return THRESHOLD_METRIC_LABELS[value as ThresholdMetric] ?? value
+}
+
+export function getRiskErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === "string") {
+      return message
+    }
+  }
+  return "发生了未知错误，请稍后重试"
 }

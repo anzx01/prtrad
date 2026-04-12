@@ -1,15 +1,25 @@
-import { ConsoleButton, ConsoleCallout, ConsoleMetric, ConsolePanel } from "../components/console-ui"
+import {
+  ConsoleBadge,
+  ConsoleButton,
+  ConsoleCallout,
+  ConsoleInset,
+  ConsoleMetric,
+  ConsolePanel,
+} from "../components/console-ui"
 import { STATE_COLORS, STATE_PANEL_STYLES, formatRiskStateLabel } from "./constants"
+import type { RiskPriority, RiskSpotlight } from "./insights"
 import type { StateEvent } from "./types"
 
 export function RiskPageHeader({
   computing,
   onCompute,
+  title,
   summary,
   tone,
 }: {
   computing: boolean
   onCompute: () => void
+  title: string
   summary: string
   tone: "safe" | "warning" | "danger"
 }) {
@@ -22,7 +32,7 @@ export function RiskPageHeader({
   return (
     <ConsoleCallout
       eyebrow="当前优先事项"
-      title={tone === "danger" ? "优先处理风险阻断" : tone === "warning" ? "先处理待办风险项" : "当前链路相对稳定"}
+      title={title}
       description={summary}
       tone={toneClassName as "good" | "warn" | "bad"}
       actions={
@@ -36,6 +46,70 @@ export function RiskPageHeader({
         </ConsoleButton>
       }
     />
+  )
+}
+
+function priorityToneLabel(tone: "info" | "good" | "warn" | "bad") {
+  if (tone === "bad") {
+    return "优先处理"
+  }
+  if (tone === "warn") {
+    return "建议先看"
+  }
+  if (tone === "good") {
+    return "当前稳定"
+  }
+  return "补充判断"
+}
+
+export function RiskPrioritySection({
+  priorities,
+  spotlight,
+}: {
+  priorities: RiskPriority[]
+  spotlight: RiskSpotlight
+}) {
+  return (
+    <section className="mb-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+      <ConsolePanel
+        title="系统建议先看这里"
+        description="这不是字段罗列，而是把当前更值得先处理的风险项排了顺序。"
+      >
+        <div className="space-y-3">
+          {priorities.map((priority) => (
+            <ConsoleInset key={priority.id} className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#e6edf3]">{priority.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-[#8b949e]">{priority.description}</p>
+                </div>
+                <ConsoleBadge label={priorityToneLabel(priority.tone)} tone={priority.tone} />
+              </div>
+              <ConsoleBadge label={priority.badge} tone={priority.tone} />
+            </ConsoleInset>
+          ))}
+        </div>
+      </ConsolePanel>
+
+      <ConsolePanel
+        title={spotlight.title}
+        description={spotlight.description}
+      >
+        {spotlight.items.length === 0 ? (
+          <ConsoleInset>
+            <p className="text-sm leading-6 text-[#c9d1d9]">{spotlight.emptyState}</p>
+          </ConsoleInset>
+        ) : (
+          <div className="space-y-3">
+            {spotlight.items.map((item) => (
+              <ConsoleInset key={item}>
+                <p className="text-sm leading-6 text-[#c9d1d9]">{item}</p>
+              </ConsoleInset>
+            ))}
+          </div>
+        )}
+      </ConsolePanel>
+    </section>
   )
 }
 
