@@ -8,10 +8,14 @@ from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from db.models import CalibrationUnit, Market, MarketSnapshot
+from services.market_resolution import (
+    infer_binary_resolution_from_source_payload,
+    normalize_binary_resolution,
+)
 from services.m3_helpers import (
     BucketKey,
     liquidity_tier_from_snapshot,
@@ -136,7 +140,7 @@ class CalibrationService:
 
         for market, snapshot in self._load_historical_samples(window_type=window_type):
             implied_probability = midpoint_from_snapshot(snapshot)
-            realized_outcome = outcome_from_resolution(market.final_resolution)
+            realized_outcome = self._resolved_outcome_for_market(market)
 
             if implied_probability is None or realized_outcome is None:
                 continue
@@ -179,7 +183,12 @@ class CalibrationService:
         markets = list(
             self.db.scalars(
                 select(Market)
-                .where(Market.final_resolution.is_not(None))
+                .where(
+                    or_(
+                        Market.final_resolution.is_not(None),
+                        Market.market_status == "resolved",
+                    )
+                )
                 .where(
                     (Market.resolution_time.is_(None)) | (Market.resolution_time >= cutoff)
                 )
@@ -224,6 +233,12 @@ class CalibrationService:
             results.append((market, snapshot))
 
         return results
+
+    def _resolved_outcome_for_market(self, market: Market) -> Decimal | None:
+        resolution = normalize_binary_resolution(market.final_resolution) or infer_binary_resolution_from_source_payload(
+            market.source_payload
+        )
+        return outcome_from_resolution(resolution)
 
     def _upsert_unit(
         self,

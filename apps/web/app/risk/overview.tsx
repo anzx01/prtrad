@@ -1,49 +1,41 @@
-import { STATE_COLORS, STATE_PANEL_STYLES } from "./constants"
+import { ConsoleButton, ConsoleCallout, ConsoleMetric, ConsolePanel } from "../components/console-ui"
+import { STATE_COLORS, STATE_PANEL_STYLES, formatRiskStateLabel } from "./constants"
 import type { StateEvent } from "./types"
-
-function SummaryCard({
-  label,
-  value,
-  accent = "text-white",
-}: {
-  label: string
-  value: string
-  accent?: string
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <div className="text-xs uppercase tracking-[0.24em] text-slate-400">{label}</div>
-      <div className={`mt-3 text-3xl font-semibold ${accent}`}>{value}</div>
-    </div>
-  )
-}
 
 export function RiskPageHeader({
   computing,
   onCompute,
+  summary,
+  tone,
 }: {
   computing: boolean
   onCompute: () => void
+  summary: string
+  tone: "safe" | "warning" | "danger"
 }) {
-  return (
-    <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Milestone 4</p>
-        <h1 className="mt-2 text-3xl font-semibold text-white">Portfolio Risk</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-300">
-          Monitor cluster exposure, global risk state, active thresholds, and
-          manual kill-switch approvals in one place.
-        </p>
-      </div>
+  const toneClassName = {
+    safe: "good",
+    warning: "warn",
+    danger: "bad",
+  }[tone]
 
-      <button
-        onClick={onCompute}
-        disabled={computing}
-        className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-500"
-      >
-        {computing ? "Computing..." : "Compute Exposures"}
-      </button>
-    </div>
+  return (
+    <ConsoleCallout
+      eyebrow="当前优先事项"
+      title={tone === "danger" ? "优先处理风险阻断" : tone === "warning" ? "先处理待办风险项" : "当前链路相对稳定"}
+      description={summary}
+      tone={toneClassName as "good" | "warn" | "bad"}
+      actions={
+        <ConsoleButton
+          onClick={onCompute}
+          disabled={computing}
+          tone="primary"
+          type="button"
+        >
+          {computing ? "计算中..." : "重算暴露"}
+        </ConsoleButton>
+      }
+    />
   )
 }
 
@@ -60,14 +52,10 @@ export function RiskSummaryGrid({
 }) {
   return (
     <div className="mb-8 grid gap-4 md:grid-cols-4">
-      <SummaryCard
-        label="Current State"
-        value={currentState}
-        accent={STATE_COLORS[currentState] ?? "text-white"}
-      />
-      <SummaryCard label="Tracked Clusters" value={exposureCount.toString()} />
-      <SummaryCard label="Breached Clusters" value={breachedCount.toString()} />
-      <SummaryCard label="Pending Requests" value={pendingCount.toString()} />
+      <ConsoleMetric label="当前状态" value={formatRiskStateLabel(currentState)} />
+      <ConsoleMetric label="跟踪簇数" value={exposureCount.toString()} />
+      <ConsoleMetric label="越限簇数" value={breachedCount.toString()} tone={breachedCount > 0 ? "warn" : "good"} />
+      <ConsoleMetric label="待处理请求" value={pendingCount.toString()} tone={pendingCount > 0 ? "warn" : "good"} />
     </div>
   )
 }
@@ -80,19 +68,18 @@ export function RiskStatePanel({
   latestEvent?: StateEvent
 }) {
   return (
-    <section
-      className={`mb-8 rounded-2xl border p-6 ${STATE_PANEL_STYLES[currentState] ?? "border-white/10 bg-white/5"}`}
-    >
-      <p className="text-sm text-slate-200/80">Global risk state</p>
+    <ConsolePanel className={`mb-8 ${STATE_PANEL_STYLES[currentState] ?? "border-[#30363d] bg-[#161b22]"}`}>
+      <p className="text-sm text-[#c9d1d9]">全局风险状态</p>
       <p className={`mt-2 text-4xl font-semibold ${STATE_COLORS[currentState] ?? "text-white"}`}>
-        {currentState}
+        {formatRiskStateLabel(currentState)}
       </p>
+      <p className="mt-1 text-xs text-[#8b949e]">状态码：{currentState}</p>
       {latestEvent && (
-        <p className="mt-3 text-xs text-slate-200/70">
-          Last change at {new Date(latestEvent.created_at).toLocaleString()}
-          {latestEvent.actor_id ? ` by ${latestEvent.actor_id}` : " via auto transition"}
+        <p className="mt-3 text-xs text-[#8b949e]">
+          最近一次变化：{new Date(latestEvent.created_at).toLocaleString("zh-CN", { hour12: false })}
+          {latestEvent.actor_id ? ` / 操作人 ${latestEvent.actor_id}` : " / 自动切换"}
         </p>
       )}
-    </section>
+    </ConsolePanel>
   )
 }

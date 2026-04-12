@@ -2,9 +2,39 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import type { ReviewTask } from "@/lib/review"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+import { apiGet, apiPost } from "@/lib/api"
+import type { ReviewTask, ReviewTaskDetailResponse, ReviewQueueStatus } from "@/lib/review"
+
+import { PageIntro, SoftPanel } from "../../components/page-intro"
+
+const STATUS_LABELS: Record<ReviewQueueStatus, string> = {
+  pending: "待处理",
+  in_progress: "处理中",
+  approved: "已通过",
+  rejected: "已拒绝",
+  cancelled: "已取消",
+}
+
+function statusStyles(status: ReviewQueueStatus) {
+  const styles: Record<ReviewQueueStatus, string> = {
+    pending: "border-amber-400/30 bg-amber-500/10 text-amber-100",
+    in_progress: "border-sky-400/30 bg-sky-500/10 text-sky-100",
+    approved: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100",
+    rejected: "border-rose-400/30 bg-rose-500/10 text-rose-100",
+    cancelled: "border-white/10 bg-white/5 text-slate-300",
+  }
+  return styles[status]
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-200">{value}</p>
+    </div>
+  )
+}
 
 export default function ReviewTaskDetailPage() {
   const params = useParams()
@@ -20,34 +50,34 @@ export default function ReviewTaskDetailPage() {
   const [actorId] = useState("reviewer_1")
 
   useEffect(() => {
-    fetch(`${API_BASE}/review/${taskId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
+    setLoading(true)
+    apiGet<ReviewTaskDetailResponse>(`/review/${taskId}`)
       .then((data) => {
         setTask(data.task)
         setLoading(false)
       })
-      .catch((err) => {
-        setError(err.message)
+      .catch((fetchError) => {
+        setError(fetchError instanceof Error ? fetchError.message : "加载审核任务失败")
         setLoading(false)
       })
   }, [taskId])
 
   async function startReview() {
     setActionLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE}/review/${taskId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/review/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ queue_status: "in_progress", assigned_to: actorId }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setTask((prev) => prev ? { ...prev, ...data.task } : null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败")
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const data = (await response.json()) as ReviewTaskDetailResponse
+      setTask(data.task)
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "开始审核失败")
     } finally {
       setActionLoading(false)
     }
@@ -55,17 +85,15 @@ export default function ReviewTaskDetailPage() {
 
   async function approveTask() {
     setActionLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE}/review/${taskId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ actor_id: actorId, approval_notes: null }),
+      const data = await apiPost<ReviewTaskDetailResponse>(`/review/${taskId}/approve`, {
+        actor_id: actorId,
+        approval_notes: null,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setTask((prev) => prev ? { ...prev, ...data.task } : null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败")
+      setTask(data.task)
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "批准失败")
     } finally {
       setActionLoading(false)
     }
@@ -73,260 +101,219 @@ export default function ReviewTaskDetailPage() {
 
   async function rejectTask() {
     if (!rejectReason.trim()) {
-      setError("请填写拒绝原因")
+      setError("请先填写拒绝原因")
       return
     }
+
     setActionLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE}/review/${taskId}/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          actor_id: actorId,
-          rejection_reason: rejectReason,
-          rejection_notes: null,
-        }),
+      const data = await apiPost<ReviewTaskDetailResponse>(`/review/${taskId}/reject`, {
+        actor_id: actorId,
+        rejection_reason: rejectReason.trim(),
+        rejection_notes: null,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setTask((prev) => prev ? { ...prev, ...data.task } : null)
+      setTask(data.task)
       setShowRejectForm(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败")
+      setRejectReason("")
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "拒绝失败")
     } finally {
       setActionLoading(false)
     }
   }
 
-  if (loading) return <div className="p-8 text-gray-700">Loading...</div>
-  if (error && !task) return <div className="p-8 text-red-600">Error: {error}</div>
-  if (!task) return <div className="p-8 text-gray-500">任务不存在</div>
+  if (loading) {
+    return <div className="p-8 text-slate-400">正在加载审核任务详情...</div>
+  }
+
+  if (!task) {
+    return <div className="p-8 text-slate-400">当前任务不存在，或已无法访问。</div>
+  }
 
   const isTerminal = ["approved", "rejected", "cancelled"].includes(task.queue_status)
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <main className="mx-auto max-w-6xl px-4 py-5 md:px-6">
       <button
+        type="button"
         onClick={() => router.push("/review")}
-        className="mb-6 text-blue-600 hover:text-blue-800 text-sm"
+        className="mb-5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10"
       >
-        ← 返回队列
+        返回审核队列
       </button>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">审核任务详情</h1>
-          <div className="flex items-center gap-3 mt-2">
-            <StatusBadge status={task.queue_status} />
-            <span className="text-xs text-gray-500">优先级: {task.priority}</span>
-          </div>
-        </div>
-        {/* 快捷操作按钮（顶部） */}
-        {!isTerminal && task.queue_status === "pending" && (
-          <button
-            onClick={startReview}
-            disabled={actionLoading}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
-          >
-            {actionLoading ? "处理中..." : "开始审核"}
-          </button>
-        )}
-        {!isTerminal && task.queue_status === "in_progress" && (
-          <div className="flex gap-2">
-            <button
-              onClick={approveTask}
-              disabled={actionLoading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
-            >
-              批准
-            </button>
-            <button
-              onClick={() => setShowRejectForm(!showRejectForm)}
-              disabled={actionLoading}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
-            >
-              拒绝
-            </button>
-          </div>
-        )}
-      </div>
+      <PageIntro
+        eyebrow="Review Detail"
+        title="审核任务详情"
+        description="这页要回答的是：这条任务为什么进队列、目前处于什么状态、你应该批准还是拒绝。先看顶部结论，再看市场信息和分类结果。"
+        stats={[
+          { label: "当前状态", value: STATUS_LABELS[task.queue_status] },
+          { label: "操作人", value: task.assigned_to ?? actorId },
+        ]}
+        guides={[
+          {
+            title: "先看什么",
+            description: "先看触发原因和分类结果，再决定是否开始审核、批准或拒绝。",
+          },
+          {
+            title: "什么时候批准",
+            description: "分类结论清晰、主类别合理、没有明显冲突时，通常可以批准。",
+          },
+          {
+            title: "什么时候拒绝",
+            description: "若类别明显错误、冲突高或市场信息本身异常，再填写拒绝原因并驳回。",
+          },
+        ]}
+      />
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-          {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">关闭</button>
-        </div>
-      )}
-
-      {/* 市场信息 */}
-      <section className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">市场信息</h2>
-        <div className="space-y-3">
+      <section className="mb-6 rounded-[28px] border border-white/10 bg-black/20 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <span className="text-xs text-gray-500 uppercase">问题</span>
-            <p className="text-gray-900 font-medium mt-1">{task.market?.question ?? "—"}</p>
-          </div>
-          {task.market?.description && (
-            <div>
-              <span className="text-xs text-gray-500 uppercase">描述</span>
-              <p className="text-gray-700 mt-1 text-sm">{task.market.description}</p>
-            </div>
-          )}
-          <div className="flex gap-6">
-            <div>
-              <span className="text-xs text-gray-500 uppercase">市场状态</span>
-              <p className="text-gray-700 mt-1 text-sm">{task.market?.market_status ?? "—"}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase">优先级</span>
-              <p className="text-gray-700 mt-1 text-sm">{task.priority}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase">触发原因</span>
-              <p className="text-gray-700 mt-1 text-sm">{task.review_reason_code ?? "—"}</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">当前结论</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span className={`rounded-full border px-3 py-1.5 text-sm ${statusStyles(task.queue_status)}`}>
+                {STATUS_LABELS[task.queue_status]}
+              </span>
+              <span className="text-sm text-slate-400">优先级：{task.priority}</span>
+              <span className="text-sm text-slate-400">触发原因：{task.review_reason_code ?? "-"}</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* 分类结果 */}
-      <section className="bg-white rounded-lg shadow p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">分类结果</h2>
-        {task.classification_result ? (
-          <div className="grid grid-cols-2 gap-4">
-            <InfoItem label="分类状态" value={task.classification_result.classification_status} />
-            <InfoItem label="主类别" value={task.classification_result.primary_category_code ?? "—"} />
-            <InfoItem
-              label="置信度"
-              value={
-                task.classification_result.confidence != null
-                  ? `${(task.classification_result.confidence * 100).toFixed(1)}%`
-                  : "—"
-              }
-            />
-            <InfoItem label="冲突数" value={String(task.classification_result.conflict_count ?? 0)} />
-            <InfoItem
-              label="需要审核"
-              value={task.classification_result.requires_review ? "是" : "否"}
-            />
-          </div>
-        ) : (
-          <p className="text-gray-500 text-sm">无分类结果</p>
-        )}
-      </section>
+          {!isTerminal && task.queue_status === "pending" ? (
+            <button
+              type="button"
+              onClick={startReview}
+              disabled={actionLoading}
+              className="rounded-full border border-sky-300/30 bg-sky-500/10 px-5 py-3 text-sm text-sky-100 transition hover:bg-sky-500/20 disabled:opacity-50"
+            >
+              {actionLoading ? "处理中..." : "开始审核"}
+            </button>
+          ) : null}
 
-      {/* 审核操作区 */}
-      {!isTerminal && (
-        <section className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">审核操作</h2>
-
-          {task.queue_status === "pending" && (
-            <div>
-              <p className="text-sm text-gray-600 mb-4">点击"开始审核"将任务标记为处理中。</p>
+          {!isTerminal && task.queue_status === "in_progress" ? (
+            <div className="flex flex-wrap gap-3">
               <button
-                onClick={startReview}
+                type="button"
+                onClick={approveTask}
                 disabled={actionLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-5 py-3 text-sm text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
               >
-                {actionLoading ? "处理中..." : "开始审核"}
+                {actionLoading && !showRejectForm ? "处理中..." : "批准"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRejectForm((current) => !current)}
+                disabled={actionLoading}
+                className="rounded-full border border-rose-300/30 bg-rose-500/10 px-5 py-3 text-sm text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
+              >
+                拒绝
               </button>
             </div>
+          ) : null}
+        </div>
+      </section>
+
+      {error ? (
+        <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+          {error}
+        </div>
+      ) : null}
+
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <SoftPanel title="市场信息" description="先确认任务对应的市场本身是否合理。">
+          <div className="space-y-4">
+            <InfoRow label="问题" value={task.market?.question ?? "-"} />
+            <InfoRow label="描述" value={task.market?.description ?? "-"} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <InfoRow label="市场状态" value={task.market?.market_status ?? "-"} />
+              <InfoRow label="市场 ID" value={task.market?.market_id ?? task.market_ref_id} />
+            </div>
+          </div>
+        </SoftPanel>
+
+        <SoftPanel title="分类结果" description="决定这条任务是否应该进入人工审核的核心依据。">
+          {task.classification_result ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <InfoRow label="分类状态" value={task.classification_result.classification_status} />
+              <InfoRow label="主类别" value={task.classification_result.primary_category_code ?? "-"} />
+              <InfoRow
+                label="置信度"
+                value={
+                  task.classification_result.confidence != null
+                    ? `${(task.classification_result.confidence * 100).toFixed(1)}%`
+                    : "-"
+                }
+              />
+              <InfoRow label="冲突数" value={String(task.classification_result.conflict_count ?? 0)} />
+              <InfoRow label="需要审核" value={task.classification_result.requires_review ? "是" : "否"} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">当前没有分类结果可供参考。</p>
           )}
+        </SoftPanel>
+      </section>
 
-          {task.queue_status === "in_progress" && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                审核人：<span className="font-medium">{task.assigned_to ?? actorId}</span>
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={approveTask}
-                  disabled={actionLoading || showRejectForm}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                >
-                  {actionLoading && !showRejectForm ? "处理中..." : "批准"}
-                </button>
-                <button
-                  onClick={() => setShowRejectForm(!showRejectForm)}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                >
-                  拒绝
-                </button>
-              </div>
+      {!isTerminal && task.queue_status === "in_progress" ? (
+        <section className="mt-6">
+          <SoftPanel title="审核操作" description="批准代表接受当前分类结论；拒绝代表需要人工回退并给出原因。">
+            <div className="space-y-4 text-sm text-slate-300">
+              <p>当前审核人：{task.assigned_to ?? actorId}</p>
+              <p>如果要拒绝，请尽量填写明确的原因码，方便后续回溯和统计。</p>
+            </div>
 
-              {showRejectForm && (
-                <div className="mt-4 p-4 bg-red-50 rounded border border-red-200">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    拒绝原因 <span className="text-red-500">*</span>
-                  </label>
+            {showRejectForm ? (
+              <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4">
+                <label className="block text-sm text-slate-200">
+                  拒绝原因
                   <input
                     type="text"
                     value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="输入拒绝原因码，如 INVALID_CATEGORY"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-red-400"
+                    onChange={(event) => setRejectReason(event.target.value)}
+                    placeholder="例如 INVALID_CATEGORY"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-rose-300/40"
                   />
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={rejectTask}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 text-sm"
-                    >
-                      {actionLoading ? "处理中..." : "确认拒绝"}
-                    </button>
-                    <button
-                      onClick={() => { setShowRejectForm(false); setRejectReason("") }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-                    >
-                      取消
-                    </button>
-                  </div>
+                </label>
+                <div className="mt-3 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={rejectTask}
+                    disabled={actionLoading}
+                    className="rounded-2xl border border-rose-300/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
+                  >
+                    {actionLoading ? "处理中..." : "确认拒绝"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRejectForm(false)
+                      setRejectReason("")
+                    }}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10"
+                  >
+                    取消
+                  </button>
                 </div>
-              )}
+              </div>
+            ) : null}
+          </SoftPanel>
+        </section>
+      ) : null}
+
+      {isTerminal ? (
+        <section className="mt-6">
+          <SoftPanel title="审核结论" description="这条任务已经完成，不再接受新的操作。">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`rounded-full border px-3 py-1.5 text-sm ${statusStyles(task.queue_status)}`}>
+                {STATUS_LABELS[task.queue_status]}
+              </span>
+              <span className="text-sm text-slate-400">
+                完成时间：{task.resolved_at ? new Date(task.resolved_at).toLocaleString("zh-CN", { hour12: false }) : "-"}
+              </span>
             </div>
-          )}
+          </SoftPanel>
         </section>
-      )}
-
-      {/* 终态展示 */}
-      {isTerminal && (
-        <section className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">审核结论</h2>
-          <p className="text-gray-700 text-sm">
-            状态：<StatusBadge status={task.queue_status} />
-          </p>
-          {task.resolved_at && (
-            <p className="text-gray-500 text-xs mt-2">
-              完成时间：{new Date(task.resolved_at).toLocaleString()}
-            </p>
-          )}
-        </section>
-      )}
-    </div>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    in_progress: "bg-blue-100 text-blue-800",
-    approved: "bg-green-100 text-green-800",
-    rejected: "bg-red-100 text-red-800",
-    cancelled: "bg-gray-100 text-gray-600",
-  }
-  return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${styles[status] ?? "bg-gray-100 text-gray-700"}`}>
-      {status.replace("_", " ").toUpperCase()}
-    </span>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="text-xs text-gray-500 uppercase">{label}</span>
-      <p className="text-gray-900 text-sm mt-1">{value}</p>
-    </div>
+      ) : null}
+    </main>
   )
 }

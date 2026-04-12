@@ -13,6 +13,7 @@ def _seed_report_inputs() -> None:
     session = TestSessionLocal()
     try:
         now = datetime.now(UTC)
+        previous_day_midday = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=12)
         market_id = uuid.uuid4()
         session.add(
             Market(
@@ -21,10 +22,10 @@ def _seed_report_inputs() -> None:
                 question="api-report-market question?",
                 category_raw="Politics",
                 market_status="active_accepting_orders",
-                creation_time=now - timedelta(days=1),
-                open_time=now - timedelta(days=1),
-                close_time=now + timedelta(days=1),
-                source_updated_at=now,
+                creation_time=previous_day_midday - timedelta(days=1),
+                open_time=previous_day_midday - timedelta(days=1),
+                close_time=previous_day_midday + timedelta(days=1),
+                source_updated_at=previous_day_midday,
             )
         )
         session.add(
@@ -39,7 +40,7 @@ def _seed_report_inputs() -> None:
                 net_ev=Decimal("0.100000"),
                 admission_decision="admit",
                 rejection_reason_code=None,
-                evaluated_at=now - timedelta(hours=1),
+                evaluated_at=previous_day_midday,
             )
         )
         session.add(
@@ -52,6 +53,7 @@ def _seed_report_inputs() -> None:
                 action="evaluate",
                 result="success",
                 event_payload={"seed": True},
+                created_at=previous_day_midday + timedelta(hours=1),
             )
         )
         session.commit()
@@ -78,3 +80,28 @@ def test_generate_report_and_list_audit(client):
     audit_response = client.get("/reports/audit")
     assert audit_response.status_code == 200
     assert len(audit_response.json()["audit_events"]) >= 1
+
+
+def test_generate_daily_report_reuses_same_window_record(client):
+    _seed_report_inputs()
+
+    first_response = client.post(
+        "/reports/generate",
+        json={"report_type": "daily_summary", "generated_by": "api_user_a"},
+    )
+    assert first_response.status_code == 200
+    first_report = first_response.json()["report"]
+
+    second_response = client.post(
+        "/reports/generate",
+        json={"report_type": "daily_summary", "generated_by": "api_user_b"},
+    )
+    assert second_response.status_code == 200
+    second_report = second_response.json()["report"]
+
+    list_response = client.get("/reports?report_type=daily_summary")
+    assert list_response.status_code == 200
+    reports = list_response.json()["reports"]
+    assert len(reports) == 1
+    assert first_report["id"] == second_report["id"]
+    assert reports[0]["generated_by"] == "api_user_b"

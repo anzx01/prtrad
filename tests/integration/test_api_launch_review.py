@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from db.models import BacktestRun, ShadowRun
+from db.models import BacktestRun, M2Report, ShadowRun
 from tests.integration.conftest import TestSessionLocal
 
 
@@ -38,6 +38,17 @@ def _seed_dependencies() -> str:
             completed_at=now,
         )
         session.add(shadow_run)
+        session.add(
+            M2Report(
+                id=uuid.uuid4(),
+                report_type="stage_review:M6",
+                report_period_start=now,
+                report_period_end=now,
+                report_data={"stage_name": "M6", "decision": "Go"},
+                generated_at=now,
+                generated_by="reporter",
+            )
+        )
         session.commit()
         return str(shadow_run.id)
     finally:

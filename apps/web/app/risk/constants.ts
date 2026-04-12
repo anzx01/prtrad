@@ -20,6 +20,32 @@ export const STATUS_BADGE_STYLES: Record<string, string> = {
   rejected: "bg-rose-500/10 text-rose-300",
 }
 
+export const STATE_LABELS: Record<string, string> = {
+  Normal: "正常",
+  Caution: "关注",
+  RiskOff: "风险关闭",
+  Frozen: "冻结",
+}
+
+export const KILL_SWITCH_TYPE_LABELS: Record<string, string> = {
+  risk_off: "切到 RiskOff",
+  freeze: "冻结交易",
+  unfreeze: "解除冻结",
+}
+
+export const REVIEW_STATUS_LABELS: Record<string, string> = {
+  pending: "待审批",
+  approved: "已批准",
+  rejected: "已拒绝",
+}
+
+export const THRESHOLD_METRIC_LABELS: Record<ThresholdMetric, string> = {
+  max_exposure: "净暴露上限",
+  max_positions: "持仓数上限",
+  utilization_caution: "关注利用率阈值",
+  utilization_risk_off: "RiskOff 利用率阈值",
+}
+
 export const DEFAULT_THRESHOLD_VALUES: Record<ThresholdMetric, string> = {
   utilization_caution: "0.60",
   utilization_risk_off: "0.80",
@@ -33,3 +59,19 @@ export const THRESHOLD_METRIC_OPTIONS: ThresholdMetric[] = [
   "utilization_caution",
   "utilization_risk_off",
 ]
+
+export function formatRiskStateLabel(value: string): string {
+  return STATE_LABELS[value] ?? value
+}
+
+export function formatKillSwitchTypeLabel(value: string): string {
+  return KILL_SWITCH_TYPE_LABELS[value] ?? value
+}
+
+export function formatReviewStatusLabel(value: string): string {
+  return REVIEW_STATUS_LABELS[value] ?? value
+}
+
+export function formatThresholdMetricLabel(value: ThresholdMetric | string): string {
+  return THRESHOLD_METRIC_LABELS[value as ThresholdMetric] ?? value
+}

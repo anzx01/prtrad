@@ -1,6 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+
+import { apiGet } from "@/lib/api"
+
+import { PageIntro, SoftPanel } from "../components/page-intro"
 
 interface ListEntry {
   id: string
@@ -12,10 +16,21 @@ interface ListEntry {
   created_at: string
 }
 
-const LIST_TYPE_STYLES: Record<string, string> = {
-  blacklist: "bg-red-100 text-red-800",
-  whitelist: "bg-green-100 text-green-800",
-  greylist: "bg-yellow-100 text-yellow-800",
+interface ListEntriesResponse {
+  entries: ListEntry[]
+}
+
+const LIST_LABELS: Record<string, string> = {
+  all: "全部",
+  blacklist: "黑名单",
+  whitelist: "白名单",
+  greylist: "灰名单",
+}
+
+const LIST_STYLES: Record<string, string> = {
+  blacklist: "border-rose-400/30 bg-rose-500/10 text-rose-100",
+  whitelist: "border-emerald-400/30 bg-emerald-500/10 text-emerald-100",
+  greylist: "border-amber-400/30 bg-amber-500/10 text-amber-100",
 }
 
 export default function ListsPage() {
@@ -25,109 +40,129 @@ export default function ListsPage() {
   const [filter, setFilter] = useState<string>("all")
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/lists/entries`)
-      .then((res) => res.json())
+    apiGet<ListEntriesResponse>("/lists/entries")
       .then((data) => {
-        setEntries(data.entries || [])
+        setEntries(data.entries ?? [])
         setLoading(false)
       })
-      .catch((err) => {
-        console.error("Failed to fetch list entries:", err)
-        setError(err.message || "Failed to fetch list entries")
+      .catch((fetchError) => {
+        setError(fetchError instanceof Error ? fetchError.message : "加载名单条目失败")
         setLoading(false)
       })
   }, [])
 
-  if (loading) return <div className="p-8 text-gray-500">加载中...</div>
+  const counts = useMemo(
+    () => ({
+      all: entries.length,
+      blacklist: entries.filter((entry) => entry.list_type === "blacklist").length,
+      whitelist: entries.filter((entry) => entry.list_type === "whitelist").length,
+      greylist: entries.filter((entry) => entry.list_type === "greylist").length,
+    }),
+    [entries],
+  )
 
-  if (error) {
-    return (
-      <div className="p-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-          <p className="font-semibold">错误</p>
-          <p className="text-sm mt-1">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  const counts = {
-    all: entries.length,
-    blacklist: entries.filter((e) => e.list_type === "blacklist").length,
-    whitelist: entries.filter((e) => e.list_type === "whitelist").length,
-    greylist: entries.filter((e) => e.list_type === "greylist").length,
-  }
-
-  const filtered = filter === "all" ? entries : entries.filter((e) => e.list_type === filter)
+  const filtered = filter === "all" ? entries : entries.filter((entry) => entry.list_type === filter)
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">List Management</h1>
+    <main className="mx-auto max-w-7xl px-4 py-5 md:px-6">
+      <PageIntro
+        eyebrow="Lists"
+        title="名单管理"
+        description="这页主要定义哪些市场需要被强制放行、强制拦截或进入灰区观察。它不会直接告诉你分类结果，但会显著影响 tagging、review 和准入判断。"
+        stats={[
+          { label: "总条目数", value: String(entries.length) },
+          { label: "当前筛选", value: LIST_LABELS[filter] ?? filter },
+        ]}
+        guides={[
+          {
+            title: "先看什么",
+            description: "先看黑名单和白名单数量，再看条目类型、匹配模式和值是否合理。",
+          },
+          {
+            title: "什么时候算异常",
+            description: "如果某批市场判断明显不符合预期，可以先回来看是不是名单规则把结果提前改写了。",
+          },
+          {
+            title: "下一步去哪",
+            description: "名单只负责口径约束；想看实际受影响的任务，要继续去 tagging、review 或 netev。",
+          },
+        ]}
+      />
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {(["all", "blacklist", "whitelist", "greylist"] as const).map((type) => (
-          <button
-            key={type}
-            onClick={() => setFilter(type)}
-            className={`rounded-lg shadow p-4 text-left transition-all ${
-              filter === type ? "ring-2 ring-blue-500" : ""
-            } bg-white`}
+      {loading ? <div className="py-20 text-center text-slate-400">正在加载名单条目...</div> : null}
+      {error ? (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-100">
+          加载失败：{error}
+        </div>
+      ) : null}
+
+      {!loading && !error ? (
+        <>
+          <section className="mb-6 grid gap-4 md:grid-cols-4">
+            {(["all", "blacklist", "whitelist", "greylist"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setFilter(type)}
+                className={`rounded-[24px] border p-4 text-left transition ${
+                  filter === type
+                    ? "border-sky-300/40 bg-sky-500/12"
+                    : "border-white/10 bg-white/[0.045] hover:bg-white/10"
+                }`}
+              >
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{LIST_LABELS[type]}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{counts[type]}</p>
+              </button>
+            ))}
+          </section>
+
+          <SoftPanel
+            title="名单条目"
+            description={filter === "all" ? "这里展示全部名单条目。" : `当前只看 ${LIST_LABELS[filter] ?? filter} 条目。`}
           >
-            <p className="text-sm text-gray-500 mb-1 capitalize">{type === "all" ? "全部" : type}</p>
-            <p className="text-2xl font-bold text-gray-900">{counts[type]}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* 列表 */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold mb-4 border-b pb-2">
-          名单条目
-          {filter !== "all" && <span className="ml-2 text-sm font-normal text-gray-500">— {filter}</span>}
-        </h2>
-
-        {filtered.length === 0 ? (
-          <p className="text-gray-500 py-4">暂无条目。</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名单类型</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">条目类型</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">值</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">匹配模式</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filtered.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${LIST_TYPE_STYLES[entry.list_type] ?? "bg-gray-100 text-gray-700"}`}>
-                        {entry.list_type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{entry.entry_type}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-900">{entry.entry_value}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{entry.match_mode}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${entry.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {entry.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(entry.created_at).toLocaleDateString("zh-CN")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+            {filtered.length === 0 ? (
+              <p className="py-4 text-sm text-slate-400">当前筛选下没有条目。</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-slate-400">
+                      <th className="px-4 py-3 font-medium">名单类型</th>
+                      <th className="px-4 py-3 font-medium">条目类型</th>
+                      <th className="px-4 py-3 font-medium">匹配值</th>
+                      <th className="px-4 py-3 font-medium">匹配模式</th>
+                      <th className="px-4 py-3 font-medium">状态</th>
+                      <th className="px-4 py-3 font-medium">创建时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((entry) => (
+                      <tr key={entry.id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs ${LIST_STYLES[entry.list_type] ?? "border-white/10 bg-white/5 text-slate-300"}`}>
+                            {LIST_LABELS[entry.list_type] ?? entry.list_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">{entry.entry_type}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-100">{entry.entry_value}</td>
+                        <td className="px-4 py-3 text-slate-400">{entry.match_mode}</td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs ${entry.is_active ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" : "border-white/10 bg-white/5 text-slate-300"}`}>
+                            {entry.is_active ? "启用中" : "已停用"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">
+                          {new Date(entry.created_at).toLocaleString("zh-CN", { hour12: false })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SoftPanel>
+        </>
+      ) : null}
+    </main>
   )
 }

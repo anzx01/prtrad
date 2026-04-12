@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from db.models import AuditLog, BacktestRun, M2Report, NetEVCandidate, RiskExposure, RiskStateEvent, ShadowRun
 from services.monitoring import MonitoringService
+
+from .periods import normalize_reference_time, resolve_report_window
 
 
 class ReportService:
@@ -30,12 +32,17 @@ class ReportService:
         generated_by: str | None = None,
         days: int | None = None,
         stage_name: str | None = None,
+        as_of: datetime | None = None,
     ) -> M2Report:
-        now = datetime.now(UTC)
         normalized_type = report_type.strip().lower()
-        period_days = days if days is not None else (1 if normalized_type == "daily_summary" else 7)
-        period_end = now
-        period_start = now - timedelta(days=max(1, period_days))
+        generated_at = normalize_reference_time(as_of)
+        report_window = resolve_report_window(
+            report_type=normalized_type,
+            reference_time=generated_at,
+            days_override=days,
+        )
+        period_start = report_window.period_start
+        period_end = report_window.period_end
 
         persisted_type = normalized_type
         if normalized_type == "stage_review" and stage_name:
@@ -48,9 +55,6 @@ class ReportService:
                 M2Report.report_period_end == period_end,
             )
         )
-        if existing is not None:
-            return existing
-
         report_data = self._build_report_data(
             report_type=normalized_type,
             period_start=period_start,
@@ -58,14 +62,22 @@ class ReportService:
             stage_name=stage_name,
         )
 
+        actor_id = (generated_by or "").strip() or None
+        if existing is not None:
+            existing.report_data = report_data
+            existing.generated_at = generated_at
+            existing.generated_by = actor_id
+            self.db.flush()
+            return existing
+
         report = M2Report(
             id=uuid.uuid4(),
             report_type=persisted_type,
             report_period_start=period_start,
             report_period_end=period_end,
             report_data=report_data,
-            generated_at=now,
-            generated_by=(generated_by or "").strip() or None,
+            generated_at=generated_at,
+            generated_by=actor_id,
         )
         self.db.add(report)
         self.db.flush()
@@ -120,7 +132,7 @@ class ReportService:
             self.db.scalars(
                 select(NetEVCandidate)
                 .where(NetEVCandidate.evaluated_at >= period_start)
-                .where(NetEVCandidate.evaluated_at <= period_end)
+                .where(NetEVCandidate.evaluated_at < period_end)
                 .order_by(NetEVCandidate.evaluated_at.desc())
             ).all()
         )
@@ -138,7 +150,7 @@ class ReportService:
             self.db.scalars(
                 select(RiskStateEvent)
                 .where(RiskStateEvent.created_at >= period_start)
-                .where(RiskStateEvent.created_at <= period_end)
+                .where(RiskStateEvent.created_at < period_end)
                 .order_by(RiskStateEvent.created_at.desc())
             ).all()
         )
@@ -147,7 +159,7 @@ class ReportService:
         audit_count = self.db.scalar(
             select(func.count(AuditLog.id))
             .where(AuditLog.created_at >= period_start)
-            .where(AuditLog.created_at <= period_end)
+            .where(AuditLog.created_at < period_end)
         ) or 0
 
         return {
@@ -177,7 +189,7 @@ class ReportService:
             self.db.scalars(
                 select(BacktestRun)
                 .where(BacktestRun.created_at >= period_start)
-                .where(BacktestRun.created_at <= period_end)
+                .where(BacktestRun.created_at < period_end)
                 .order_by(BacktestRun.created_at.desc())
             ).all()
         )
@@ -185,7 +197,7 @@ class ReportService:
             self.db.scalars(
                 select(RiskStateEvent)
                 .where(RiskStateEvent.created_at >= period_start)
-                .where(RiskStateEvent.created_at <= period_end)
+                .where(RiskStateEvent.created_at < period_end)
                 .order_by(RiskStateEvent.created_at.desc())
             ).all()
         )
@@ -228,7 +240,7 @@ class ReportService:
         audit_count = self.db.scalar(
             select(func.count(AuditLog.id))
             .where(AuditLog.created_at >= period_start)
-            .where(AuditLog.created_at <= period_end)
+            .where(AuditLog.created_at < period_end)
         ) or 0
 
         dod = {

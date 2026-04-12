@@ -117,3 +117,64 @@ def test_review_queue_total_counts_all_matching_tasks(client):
     assert len(data["tasks"]) == 1
     assert data["page"] == 1
     assert data["page_size"] == 1
+
+
+def test_bulk_review_action_can_start_pending_tasks(client):
+    task_id = _seed_review_task(queue_status="pending")
+
+    response = client.post(
+        "/review/bulk-action",
+        json={
+            "task_ids": [str(task_id)],
+            "action": "start_review",
+            "actor_id": "reviewer_bulk",
+        },
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["updated_count"] == 1
+    assert data["tasks"][0]["queue_status"] == "in_progress"
+    assert data["tasks"][0]["assigned_to"] == "reviewer_bulk"
+
+
+def test_bulk_review_action_can_approve_pending_tasks_directly(client):
+    first_task_id = _seed_review_task(queue_status="pending")
+    second_task_id = _seed_review_task(queue_status="open")
+
+    response = client.post(
+        "/review/bulk-action",
+        json={
+            "task_ids": [str(first_task_id), str(second_task_id)],
+            "action": "approve",
+            "actor_id": "reviewer_bulk",
+            "notes": "bulk approve",
+        },
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["updated_count"] == 2
+    assert [task["queue_status"] for task in data["tasks"]] == ["approved", "approved"]
+
+    detail_first = client.get(f"/review/{first_task_id}")
+    detail_second = client.get(f"/review/{second_task_id}")
+    assert detail_first.status_code == 200
+    assert detail_second.status_code == 200
+    assert detail_first.json()["task"]["queue_status"] == "approved"
+    assert detail_second.json()["task"]["queue_status"] == "approved"
+
+
+def test_bulk_review_reject_requires_reason(client):
+    task_id = _seed_review_task(queue_status="pending")
+
+    response = client.post(
+        "/review/bulk-action",
+        json={
+            "task_ids": [str(task_id)],
+            "action": "reject",
+            "actor_id": "reviewer_bulk",
+        },
+    )
+    assert response.status_code == 400
+    assert "rejection_reason" in response.json()["detail"]

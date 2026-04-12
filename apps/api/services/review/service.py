@@ -163,6 +163,44 @@ class ReviewService:
 
         return int(self.db.scalar(query) or 0)
 
+    def start_review(
+        self,
+        review_task_id: UUID,
+        actor_id: str,
+    ) -> MarketReviewTask:
+        review_task = self._get_review_task_or_error(review_task_id)
+        current_status = normalize_review_status(review_task.queue_status)
+
+        if current_status not in [REVIEW_STATUS_PENDING, REVIEW_STATUS_IN_PROGRESS]:
+            raise ValueError(
+                f"Cannot start task in status {current_status}. "
+                f"Task must be in {REVIEW_STATUS_PENDING} or {REVIEW_STATUS_IN_PROGRESS} status."
+            )
+
+        started_at = _now_utc()
+        if current_status == REVIEW_STATUS_PENDING:
+            review_task.queue_status = REVIEW_STATUS_IN_PROGRESS
+            review_task.review_payload = {
+                **(review_task.review_payload or {}),
+                "started_by": actor_id,
+                "started_at": str(started_at),
+            }
+
+        review_task.assigned_to = actor_id
+        self.db.flush()
+
+        self._write_audit_log(
+            object_id=str(review_task_id),
+            action="start_review",
+            result="success",
+            payload={
+                "actor_id": actor_id,
+                "market_ref_id": str(review_task.market_ref_id),
+            },
+        )
+
+        return review_task
+
     def update_review_task(
         self,
         review_task_id: UUID,
@@ -219,11 +257,8 @@ class ReviewService:
         actor_id: str,
         approval_notes: str | None = None,
     ) -> MarketReviewTask:
-        review_task = self.db.get(MarketReviewTask, review_task_id)
-        if not review_task:
-            raise ValueError(f"Review task {review_task_id} not found")
-
-        current_status = normalize_review_status(review_task.queue_status)
+        review_task = self._get_review_task_or_error(review_task_id)
+        current_status = self._prepare_review_for_decision(review_task, actor_id)
         if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
                 f"Cannot approve task in status {current_status}. "
@@ -261,11 +296,8 @@ class ReviewService:
         rejection_reason: str,
         rejection_notes: str | None = None,
     ) -> MarketReviewTask:
-        review_task = self.db.get(MarketReviewTask, review_task_id)
-        if not review_task:
-            raise ValueError(f"Review task {review_task_id} not found")
-
-        current_status = normalize_review_status(review_task.queue_status)
+        review_task = self._get_review_task_or_error(review_task_id)
+        current_status = self._prepare_review_for_decision(review_task, actor_id)
         if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
                 f"Cannot reject task in status {current_status}. "
@@ -298,6 +330,48 @@ class ReviewService:
 
         return review_task
 
+    def bulk_apply_action(
+        self,
+        review_task_ids: list[UUID],
+        action: str,
+        actor_id: str,
+        rejection_reason: str | None = None,
+        notes: str | None = None,
+    ) -> list[MarketReviewTask]:
+        if not review_task_ids:
+            raise ValueError("review_task_ids cannot be empty")
+        if action not in {"start_review", "approve", "reject"}:
+            raise ValueError("action must be one of start_review, approve, reject")
+        if action == "reject" and not rejection_reason:
+            raise ValueError("rejection_reason is required when action=reject")
+
+        tasks: list[MarketReviewTask] = []
+        seen: set[UUID] = set()
+
+        for review_task_id in review_task_ids:
+            if review_task_id in seen:
+                continue
+            seen.add(review_task_id)
+
+            if action == "start_review":
+                task = self.start_review(review_task_id, actor_id=actor_id)
+            elif action == "approve":
+                task = self.approve_review(
+                    review_task_id,
+                    actor_id=actor_id,
+                    approval_notes=notes,
+                )
+            else:
+                task = self.reject_review(
+                    review_task_id,
+                    actor_id=actor_id,
+                    rejection_reason=rejection_reason or "",
+                    rejection_notes=notes,
+                )
+            tasks.append(task)
+
+        return tasks
+
     def get_review_task(self, review_task_id: UUID) -> MarketReviewTask | None:
         return self.db.execute(
             select(MarketReviewTask)
@@ -307,6 +381,36 @@ class ReviewService:
                 selectinload(MarketReviewTask.classification_result),
             )
         ).scalar_one_or_none()
+
+    def _get_review_task_or_error(self, review_task_id: UUID) -> MarketReviewTask:
+        review_task = self.db.get(MarketReviewTask, review_task_id)
+        if not review_task:
+            raise ValueError(f"Review task {review_task_id} not found")
+        return review_task
+
+    def _prepare_review_for_decision(
+        self,
+        review_task: MarketReviewTask,
+        actor_id: str,
+    ) -> str:
+        current_status = normalize_review_status(review_task.queue_status)
+        if current_status == REVIEW_STATUS_PENDING:
+            review_task.queue_status = REVIEW_STATUS_IN_PROGRESS
+            review_task.assigned_to = actor_id
+            review_task.review_payload = {
+                **(review_task.review_payload or {}),
+                "started_by": actor_id,
+                "started_at": str(_now_utc()),
+                "started_implicitly": True,
+            }
+            return REVIEW_STATUS_IN_PROGRESS
+
+        if current_status == REVIEW_STATUS_IN_PROGRESS:
+            if review_task.assigned_to != actor_id:
+                review_task.assigned_to = actor_id
+            return REVIEW_STATUS_IN_PROGRESS
+
+        return current_status or REVIEW_STATUS_PENDING
 
     def _write_audit_log(
         self,

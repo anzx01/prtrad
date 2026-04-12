@@ -1,93 +1,142 @@
 # 开发进度
 
-## 2026-04-10
+## 2026-04-12
 
 ### 今日完成
 
-- M4-M6 主链路保持可运行，继续做了 DQ 零通过率排障收口。
-- 定位到 `Data Quality Dashboard` 中 `pass=0` 的直接原因：
-  - 快照抓取链路在 CLOB 网络不稳定时失败，导致 DQ 连续命中 `DQ_SNAPSHOT_STALE`。
-- 已完成后端修复（最小可落地，不做过度设计）：
-  - `capture_snapshots` 增加容错统计：`book_fetch_failed_tokens`
-  - CLOB 失败场景新增 source payload 降级快照能力
-  - 新增配置：`INGEST_ALLOW_SOURCE_PAYLOAD_FALLBACK`（默认 `true`）
-  - Worker 重启后，快照与 DQ 恢复出数，不再全量 stale
-- 继续把这次 DQ 排障收口为可复用运维能力：
-  - 修复 `market_snapshot_capture` 审计日志缺少 `book_fetch_failed_tokens` / `created_from_source_payload` 的问题
-  - `/dq/summary` 新增最近一次快照抓取诊断信息，便于直接查看 fallback 与抓取失败情况
-  - `Data Quality Dashboard` 新增快照诊断区与操作检查项
-  - 修复 `Data Quality Dashboard` 首次加载后不再刷新的问题，新增 30 秒自动刷新与手动刷新按钮，避免页面长时间停留在旧批次
-  - 新增 `scripts/check-dq-health.ps1` 与 `npm run health:dq`，把快速健康检查收敛成统一脚本入口
-  - 修复 `scripts/test-m456.ps1` 与 `scripts/test-risk.ps1` 中 `npm exec tsc` 参数写法，恢复统一脚本入口可用性
-- 排查并临时恢复了 Calibration 页面：
-  - 症状：`Calibration Units` 页面提示无法连接 `http://localhost:8000`
-  - 直接原因：本机 API 进程未监听 `8000`
-  - 深层原因：本地 SQLite 仍停留在 Alembic revision `20260404_0010`，访问 `/calibration/units` 时缺少 `calibration_units` 表
-  - 尝试执行 `npm run db:upgrade` 后，定位到 M3 迁移 `8f9a8414a637` 在 SQLite 上会因为 `tag_quality_metrics.metric_date` 的 `DATE -> DATETIME` batch cast 触发唯一约束冲突
-  - 当前已临时恢复：重新拉起 API 后，`/calibration/units` 可返回 `200`；页面不再是连通性错误，但当前单位列表为空
-- 修复并重写了乱码文档：
+- 将首页 `/` 从静态导航页重做为“智能驾驶舱”。
+- 首页新增自动并行汇总能力，统一读取：
+  - `/monitoring/metrics`
+  - `/dq/summary`
+  - `/review/queue`
+  - `/risk/state`
+  - `/risk/exposures`
+  - `/risk/kill-switch?status=pending`
+  - `/calibration/units?include_inactive=true`
+  - `/backtests`
+  - `/shadow`
+  - `/launch-review`
+  - `/reports`
+- 首页新增三类核心输出：
+  - 系统当前判断
+  - 下一步建议
+  - 主链路状态与 M4/M5/M6 阶段状态
+- 首页新增一键动作中心：
+  - 重算风险暴露
+  - 重算长窗口校准
+  - 运行回测
+  - 运行 shadow
+  - 生成日报
+  - 生成周报
+  - 生成 M4/M5/M6 阶段评审
+  - 一键刷新完整证据包
+- 首页新增动作日志，解决“点了没反应”的不确定感。
+- 首页自动化对 SQLite 偶发 `database is locked` 增加有限次短重试。
+- 结构整理：
+  - 新增 `apps/web/app/home/`
+  - 拆分 `types.ts`
+  - 拆分 `automation.ts`
+  - 拆分 `summary-core.ts`
+  - 拆分 `summary-readouts.ts`
+  - 拆分 `summary-shared.ts`
+  - 拆分 `dashboard-sections.tsx`
+  - 拆分 `action-panels.tsx`
+- `/reports` 页面完成二次重构：
+  - 顶部新增“智能速读”，直接说明当前该先看哪份报告
+  - 新增“系统建议先看这里”，把阅读顺序和原因解释清楚
+  - 新增 `M4 / M5 / M6` 门槛概览，区分“没报告”和“有报告但真没过”
+  - 保留归档与详情，但改成左选右读的工作台结构
+  - `stage_review` 的中文解读补充为“最新回测本身是 NoGo”这类更贴近实际的解释
+  - 报表前端进一步拆分为：
+    - `report-dashboard.ts`
+    - `report-overview.tsx`
+    - `report-detail-views.tsx`
+- `/review` 页面补齐审核台能力：
+  - 队列页支持单条“开始审核 / 通过 / 拒绝”快捷操作
+  - 队列页支持勾选、多选、全选本页、批量通过、批量拒绝、批量开始审核
+  - 队列页补充“全选当前筛选 N 条”与“一键开始审核已选 / 一键通过已选 / 一键拒绝已选”
+  - 后端新增 `/review/bulk-action` 批量审核接口
+  - `pending/open` 任务在批量通过或拒绝时可自动领取为 `in_progress` 再完成审核
+- 重写并清理文档乱码：
   - `README.md`
   - `docs/dev-progress.md`
 
-### 验证结果
-
-- 自动化测试：
-  - `python -m pytest tests/test_ingest_snapshot_resilience.py -q` -> `3 passed`
-  - `python -m pytest tests/test_dq_service.py tests/integration/test_api_dq.py -q` -> `12 passed`
-  - `npm run test:m456` -> `35 passed`
-  - `npm run test:risk` -> `22 passed`
-  - `python -m pytest tests/integration/test_api_dq.py tests/test_ingest_snapshot_resilience.py -q` -> `12 passed`
-  - `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
-  - `powershell -ExecutionPolicy Bypass -File ./scripts/check-dq-health.ps1 -ApiBaseUrl http://127.0.0.1:8766`（mock `/dq/summary`）-> `passed`
-  - 本机运行态复核（2026-04-10 22:40 左右）：
-    - `http://localhost:8000/dq/summary` -> `pass=16, warn=176, fail=8`
-    - `freshness_status=fresh`
-  - Calibration 运行态复核（2026-04-10 22:51 左右）：
-    - `http://localhost:8000/health` -> `200 ok`
-    - `http://localhost:8000/calibration/units?include_inactive=true` -> `200 []`
-    - `POST /calibration/recompute-all?window_type=long` -> `total_units=0`
-  - 数据库迁移复核：
-    - `npm run db:current` -> `20260404_0010`
-    - `npm run db:upgrade` -> 失败，阻塞点为 `8f9a8414a637`
-- 运行态验证：
-  - `/dq/summary` 返回：
-    - `status_distribution`: `warn=154, pass=25, fail=21`
-    - `snapshot_age_seconds`: `16`
-    - `freshness_status`: `fresh`
-- 网络连通性快速检查（收工前）：
-  - 本机 API 正常
-  - Gamma/CLOB 当前可连通（HTTP 200，延迟约 0.7s~1.5s）
-
 ### 当前状态
 
-- M4：可用
-- M5：可用
-- M6：可用
-- DQ 看板：已从 `pass=0` 恢复
-- Calibration 页面：API 连通性已恢复，但本地历史库迁移仍未补齐到 head，当前为“接口可打开、数据为空、迁移待修复”
+- `M4`：主链路可用，风险、状态机、Kill-switch、阈值维护可运行。
+- `M5`：回测、日报、周报、阶段评审主链路可用，首页已能把报告与阶段评审转成更易理解的入口。
+- `M6`：shadow、launch review、Go/NoGo 门槛可用，首页已能直接提示为什么当前不能 Go。
+- 智能化方向已落第一版：不再让用户先背全系统，再自己拼流程。
 
-### 下一步
+### 验证结果
 
-- 下次开始前先做一次快速健康检查：
-  - `npm run task:snapshot-sync`
-  - `npm run task:dq-run`
-  - `npm run health:dq`
-- 优先修复 SQLite 历史库的迁移链路：
-  - 处理 `8f9a8414a637` 对 `tag_quality_metrics.metric_date` 的 SQLite cast 问题
-  - 清理本次失败迁移留下的半升级状态，再继续 `npm run db:upgrade`
-- 若外网再次抖动，优先观察：
+- `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
+- `python -m pytest tests/integration/test_api_review.py -q` -> `7 passed`
+- `Invoke-WebRequest http://localhost:3000` -> `200`
+- `Invoke-WebRequest http://localhost:3000/reports` -> `200`
+- `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
+- `npm run build:web` -> `passed`
+- 首页自动汇总数据基于本地实际 API 返回，而不是写死样例。
+
+### 关键判断
+
+- 当前项目的主要学习成本，不再是“页面长得不够好看”，而是用户需要自己理解链路、判断卡点、手动拼动作。
+- 第一版智能驾驶舱已经把这件事前移到系统层处理。
+- 当前最大的人工瓶颈仍然是审核队列，系统会明确暴露这一点，但不会假装自动替代人工审核。
+
+### 明日优先级
+
+1. 评估是否要把首页自动化动作进一步脚本化，沉淀为 `scripts/` 层面的统一入口。
+2. 继续梳理首页以外仍然“需要先学习再操作”的页面，优先处理：
+   - `/launch-review`
+   - `/risk`
+3. 继续收口页面层的编码与渲染稳定性问题，避免再出现 hydration / 乱码 / 热更新中断带来的误判。
+
+### 风险与备注
+
+- 当前工作树本身是脏的，已避免回滚其他已有改动。
+- 首页自动化虽然做了 SQLite 锁重试，但数据库本质仍是 SQLite；高频并发写入时仍需保持谨慎。
+- 文档乱码问题已通过整体重写规避；后续新增文档继续保持 UTF-8 中文。
+
+## 2026-04-11
+
+### 当日完成摘要
+
+- 修复 SQLite 历史库在 M3 迁移 `8f9a8414a637` 上的兼容问题。
+- 修复 calibration / resolved 样本链路，使 Calibration Units 不再长期全 0。
+- 修复 Review Queue `pending=0` 的运行态缺口，恢复 tagging 自动分类后可正常出数。
+- 修正 Launch Review 创建后容易误导的交互语义：
+  - `Create Review` 成功不等于 checklist 全通过
+  - `Go` 被禁用通常表示证据门槛未满足，不是创建失败
+- 补齐多轮后端与前端验证，`test:m456` 通过。
+
+### 核心结论
+
+- Calibration 全 0 的主要根因是历史 resolved 样本缺失 `final_resolution`，以及同步链路只盯 active catalog。
+- Review Queue 全 0 的主要根因是本地 tagging 调度未持续运行。
+- Launch Review “点不动”的主要根因是证据链未通过，不是按钮失效。
+
+## 2026-04-10
+
+### 当日完成摘要
+
+- 收口 DQ `pass=0` 问题。
+- 为快照抓取与 DQ 排障补齐更明确的诊断字段与脚本入口：
   - `book_fetch_failed_tokens`
-  - `market_snapshot_capture` 审计日志
+  - source payload 降级快照
+  - `/dq` 页面快照诊断
+  - `npm run health:dq`
+- 修复 `scripts/test-m456.ps1` 与 `scripts/test-risk.ps1` 的 TypeScript 调用参数问题。
+
+### 核心结论
+
+- `pass=0` 更常见的是快照链路陈旧，不是前端页面本身坏掉。
+- 后续所有类似问题都应优先走“链路健康检查”，而不是先猜 UI。
 
 ## 2026-04-09
 
-### 今日完成（摘要）
+### 当日完成摘要
 
-- 修复 Review Queue 历史状态兼容问题（`open` 归并到 `pending`）。
+- 修复 Review Queue 历史状态兼容问题。
 - 修复 tagging 分类落库与 review task 状态更新逻辑。
 - 补齐 tagging 默认基线种子脚本与联调用例。
-
-### 验证结果（摘要）
-
-- `python -m pytest tests/integration/test_api_review.py -q` -> `4 passed`
-- `python -m pytest tests/integration/test_api_monitoring.py tests/integration/test_api_tagging.py -q` -> `9 passed`

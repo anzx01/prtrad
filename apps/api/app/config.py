@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     polymarket_clob_api_url: str = "https://clob.polymarket.com"
     ingest_http_timeout_seconds: int = 20
     ingest_gamma_page_size: int = 100
+    ingest_closed_market_page_limit: int = 3
     ingest_clob_batch_size: int = 25
     ingest_allow_source_payload_fallback: bool = True
     ingest_market_sync_interval_seconds: int = 900
