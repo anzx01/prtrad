@@ -6,6 +6,7 @@ export type ReviewQueueStatus =
   | "cancelled"
 
 export type ReviewPriority = "low" | "normal" | "high" | "urgent"
+export type ReviewBulkAction = "start_review" | "approve" | "reject"
 
 export interface ReviewMarketSummary {
   market_id: string
@@ -56,4 +57,9 @@ export interface ReviewQueueResponse {
 
 export interface ReviewTaskDetailResponse {
   task: ReviewTask
+}
+
+export interface ReviewBulkActionResponse {
+  tasks: ReviewTaskSummary[]
+  updated_count: number
 }

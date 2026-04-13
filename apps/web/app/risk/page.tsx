@@ -3,10 +3,20 @@
 import { useEffect, useState, type FormEvent } from "react"
 
 import { apiGet, apiPost } from "@/lib/api"
+import { PageIntro } from "../components/page-intro"
 
-import { DEFAULT_THRESHOLD_VALUES } from "./constants"
+import {
+  DEFAULT_THRESHOLD_VALUES,
+  formatRiskStateLabel,
+  formatThresholdMetricLabel,
+  getRiskErrorMessage,
+  INITIAL_KILL_SWITCH_FORM,
+  INITIAL_THRESHOLD_FORM,
+} from "./constants"
+import { buildRiskInsights } from "./insights"
 import {
   RiskPageHeader,
+  RiskPrioritySection,
   RiskStatePanel,
   RiskSummaryGrid,
 } from "./overview"
@@ -31,33 +41,6 @@ import type {
   ThresholdItem,
   ThresholdMetric,
 } from "./types"
-
-const INITIAL_KILL_SWITCH_FORM: KillSwitchFormState = {
-  request_type: "risk_off",
-  target_scope: "global",
-  requested_by: "",
-  reason: "",
-}
-
-const INITIAL_THRESHOLD_FORM: ThresholdFormState = {
-  cluster_code: "global",
-  metric_name: "max_exposure",
-  threshold_value: DEFAULT_THRESHOLD_VALUES.max_exposure,
-  created_by: "",
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === "string") {
-      return message
-    }
-  }
-  return "Unexpected error"
-}
 
 export default function RiskPage() {
   const [riskState, setRiskState] = useState<RiskStateData | null>(null)
@@ -89,7 +72,7 @@ export default function RiskPage() {
       setKillSwitchRequests(requestData.requests)
       setError(null)
     } catch (fetchError) {
-      setError(getErrorMessage(fetchError))
+      setError(getRiskErrorMessage(fetchError))
     } finally {
       setLoading(false)
     }
@@ -114,7 +97,7 @@ export default function RiskPage() {
       await apiPost("/risk/exposures/compute")
       await fetchAll()
     } catch (computeError) {
-      setError(getErrorMessage(computeError))
+      setError(getRiskErrorMessage(computeError))
     } finally {
       setComputing(false)
     }
@@ -133,25 +116,25 @@ export default function RiskPage() {
       setKillSwitchForm(INITIAL_KILL_SWITCH_FORM)
       await fetchAll()
     } catch (submitError) {
-      setError(getErrorMessage(submitError))
+      setError(getRiskErrorMessage(submitError))
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleReview = async (id: string, action: ReviewAction) => {
-    const reviewer = window.prompt("Reviewer ID")
+    const reviewer = window.prompt("审批人 ID")
     if (!reviewer) {
       return
     }
-    const notes = window.prompt("Optional review notes") ?? ""
+    const notes = window.prompt("可选备注") ?? ""
 
     setError(null)
     try {
       await apiPost(`/risk/kill-switch/${id}/${action}`, { reviewer, notes })
       await fetchAll()
     } catch (reviewError) {
-      setError(getErrorMessage(reviewError))
+      setError(getRiskErrorMessage(reviewError))
     }
   }
 
@@ -192,7 +175,7 @@ export default function RiskPage() {
       }))
       await fetchAll()
     } catch (submitError) {
-      setError(getErrorMessage(submitError))
+      setError(getRiskErrorMessage(submitError))
     } finally {
       setSavingThreshold(false)
     }
@@ -200,7 +183,7 @@ export default function RiskPage() {
 
   const handleDeactivateThreshold = async (threshold: ThresholdItem) => {
     const confirmed = window.confirm(
-      `Disable override ${threshold.cluster_code} / ${threshold.metric_name} and fall back to default threshold?`,
+      `确认停用 ${threshold.cluster_code} / ${formatThresholdMetricLabel(threshold.metric_name)} 覆盖，并恢复为默认阈值吗？`,
     )
     if (!confirmed) {
       return
@@ -212,24 +195,63 @@ export default function RiskPage() {
       await apiPost(`/risk/thresholds/${threshold.id}/deactivate`)
       await fetchAll()
     } catch (deactivateError) {
-      setError(getErrorMessage(deactivateError))
+      setError(getRiskErrorMessage(deactivateError))
     } finally {
       setDeactivatingThresholdId(null)
     }
   }
 
   if (loading) {
-    return <div className="p-8 text-slate-300">Loading risk controls...</div>
+    return <div className="p-8 text-slate-300">正在加载风控数据...</div>
   }
 
   const currentState = riskState?.state ?? "Normal"
+  const currentStateLabel = formatRiskStateLabel(currentState)
   const pendingRequests = killSwitchRequests.filter((request) => request.status === "pending")
   const reviewedRequests = killSwitchRequests.filter((request) => request.status !== "pending")
   const breachedClusters = exposures.filter((exposure) => exposure.is_breached)
+  const pendingCount = pendingRequests.length
+  const breachedCount = breachedClusters.length
+  const insights = buildRiskInsights({
+    riskState,
+    exposures,
+    thresholds,
+    killSwitchRequests,
+  })
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-      <RiskPageHeader computing={computing} onCompute={handleCompute} />
+    <main className="mx-auto max-w-7xl px-4 py-5 md:px-6">
+      <PageIntro
+        eyebrow="Risk"
+        title="组合风控"
+        description="这页回答的是“系统现在安不安全、要不要人工介入”。先看当前风险状态和越限簇，再看 kill-switch 审批与阈值覆盖，最后回看状态历史。"
+        stats={[
+          { label: "当前状态", value: currentStateLabel },
+          { label: "待处理请求", value: String(pendingCount) },
+        ]}
+        guides={[
+          {
+            title: "先看什么",
+            description: "先看当前状态和越限簇数，再看是否有待审批 kill-switch，最后再调阈值和回看历史。",
+          },
+          {
+            title: "什么时候要动作",
+            description: "系统停在 RiskOff / 冻结、存在越限簇、或有待审批请求挂起时，都意味着这里不是只看一眼就能离开。",
+          },
+          {
+            title: "下一步去哪",
+            description: "需要看告警概览去 state-alerts；需要判断能否上线则继续去 launch-review。",
+          },
+        ]}
+      />
+
+      <RiskPageHeader
+        computing={computing}
+        onCompute={handleCompute}
+        title={insights.headline.title}
+        summary={insights.headline.description}
+        tone={insights.headline.tone}
+      />
 
       {error && (
         <div className="mb-6 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -240,9 +262,11 @@ export default function RiskPage() {
       <RiskSummaryGrid
         currentState={currentState}
         exposureCount={exposures.length}
-        breachedCount={breachedClusters.length}
-        pendingCount={pendingRequests.length}
+        breachedCount={breachedCount}
+        pendingCount={pendingCount}
       />
+
+      <RiskPrioritySection priorities={insights.priorities} spotlight={insights.spotlight} />
 
       <RiskStatePanel currentState={currentState} latestEvent={riskState?.history[0]} />
 

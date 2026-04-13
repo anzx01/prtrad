@@ -17,7 +17,7 @@ python -m pytest `
 if ($LASTEXITCODE -ne 0) { throw "m4-m6 pytest failed" }
 
 Write-Host "Running web TypeScript check..." -ForegroundColor Yellow
-npm --workspace apps/web exec -- tsc -- --noEmit
+npm --workspace apps/web exec tsc -- --noEmit
 if ($LASTEXITCODE -ne 0) { throw "web typecheck failed" }
 
 Write-Host "M4-M6 automation checks passed." -ForegroundColor Green

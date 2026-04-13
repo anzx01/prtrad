@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from db.models import BacktestRun, ShadowRun
+from db.models import BacktestRun, M2Report, ShadowRun
 from services.launch_review import LaunchReviewService
 
 
@@ -47,10 +47,27 @@ def _seed_shadow(session, *, recommendation: str = "go", risk_state: str = "Norm
     return run
 
 
+def _seed_stage_review(session, *, stage_name: str = "M6", decision: str = "Go") -> M2Report:
+    now = datetime.now(UTC)
+    report = M2Report(
+        id=uuid.uuid4(),
+        report_type=f"stage_review:{stage_name}",
+        report_period_start=now,
+        report_period_end=now,
+        report_data={"stage_name": stage_name, "decision": decision},
+        generated_at=now,
+        generated_by="reporter",
+    )
+    session.add(report)
+    session.commit()
+    return report
+
+
 def test_create_review_builds_default_checklist(test_db):
     session = test_db()
     backtest = _seed_backtest(session, recommendation="go")
     shadow = _seed_shadow(session, recommendation="go", risk_state="Normal")
+    stage_review = _seed_stage_review(session, stage_name="M6", decision="Go")
 
     service = LaunchReviewService(session)
     review = service.create_review(
@@ -63,7 +80,9 @@ def test_create_review_builds_default_checklist(test_db):
     assert review.status == "pending"
     assert review.shadow_run_id == shadow.id
     assert review.evidence_summary["latest_backtest"]["id"] == str(backtest.id)
+    assert review.evidence_summary["latest_stage_review"]["id"] == str(stage_review.id)
     assert any(item["code"] == "shadow_not_blocked" and item["passed"] is True for item in review.checklist)
+    assert any(item["code"] == "latest_stage_review_go" and item["passed"] is True for item in review.checklist)
     session.close()
 
 
@@ -71,6 +90,7 @@ def test_decide_review_blocks_go_when_checklist_has_failures(test_db):
     session = test_db()
     _seed_backtest(session, recommendation="nogo")
     shadow = _seed_shadow(session, recommendation="block", risk_state="RiskOff")
+    _seed_stage_review(session, stage_name="M6", decision="NoGo")
 
     service = LaunchReviewService(session)
     review = service.create_review(

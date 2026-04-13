@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -26,6 +26,11 @@ class ReviewTaskDetailResponse(BaseModel):
     task: dict[str, Any]
 
 
+class BulkReviewActionResponse(BaseModel):
+    tasks: list[dict[str, Any]]
+    updated_count: int
+
+
 class CreateReviewTaskRequest(BaseModel):
     market_ref_id: str = Field(..., description="Market UUID")
     classification_result_id: str = Field(..., description="Classification result UUID")
@@ -49,6 +54,54 @@ class RejectReviewRequest(BaseModel):
     actor_id: str = Field(..., description="Reviewer ID")
     rejection_reason: str = Field(..., description="Rejection reason code")
     rejection_notes: str | None = Field(None, description="Rejection notes")
+
+
+class BulkReviewActionRequest(BaseModel):
+    task_ids: list[str] = Field(..., min_length=1, description="Review task UUIDs")
+    action: Literal["start_review", "approve", "reject"] = Field(..., description="Bulk action type")
+    actor_id: str = Field(..., description="Reviewer ID")
+    rejection_reason: str | None = Field(None, description="Rejection reason code for bulk reject")
+    notes: str | None = Field(None, description="Shared notes")
+
+
+def _serialize_task_summary(task: Any) -> dict[str, Any]:
+    return {
+        "id": str(task.id),
+        "market_ref_id": str(task.market_ref_id),
+        "classification_result_id": str(task.classification_result_id),
+        "queue_status": normalize_review_status(task.queue_status),
+        "review_reason_code": task.review_reason_code,
+        "priority": task.priority,
+        "assigned_to": task.assigned_to,
+        "review_payload": task.review_payload,
+        "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
+        "created_at": task.created_at.isoformat(),
+        "updated_at": task.updated_at.isoformat(),
+        "market": {
+            "market_id": task.market.market_id,
+            "question": task.market.question,
+        } if getattr(task, "market", None) else None,
+    }
+
+
+def _serialize_task_detail(task: Any) -> dict[str, Any]:
+    task_data = _serialize_task_summary(task)
+    task_data["market"] = {
+        "id": str(task.market.id),
+        "market_id": task.market.market_id,
+        "question": task.market.question,
+        "description": task.market.description,
+        "market_status": task.market.market_status,
+    } if task.market else None
+    task_data["classification_result"] = {
+        "id": str(task.classification_result.id),
+        "classification_status": task.classification_result.classification_status,
+        "primary_category_code": task.classification_result.primary_category_code,
+        "confidence": float(task.classification_result.confidence) if task.classification_result.confidence else None,
+        "requires_review": task.classification_result.requires_review,
+        "conflict_count": task.classification_result.conflict_count,
+    } if task.classification_result else None
+    return task_data
 
 
 @router.get("/queue", response_model=ReviewQueueResponse)
@@ -79,26 +132,7 @@ def get_review_queue(
     )
 
     # Serialize tasks
-    task_data = [
-        {
-            "id": str(task.id),
-            "market_ref_id": str(task.market_ref_id),
-            "classification_result_id": str(task.classification_result_id),
-            "queue_status": normalize_review_status(task.queue_status),
-            "review_reason_code": task.review_reason_code,
-            "priority": task.priority,
-            "assigned_to": task.assigned_to,
-            "review_payload": task.review_payload,
-            "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-            "created_at": task.created_at.isoformat(),
-            "updated_at": task.updated_at.isoformat(),
-            "market": {
-                "market_id": task.market.market_id,
-                "question": task.market.question,
-            } if task.market else None,
-        }
-        for task in tasks
-    ]
+    task_data = [_serialize_task_summary(task) for task in tasks]
 
     return ReviewQueueResponse(
         tasks=task_data,
@@ -126,37 +160,7 @@ def get_review_task(
     if not task:
         raise HTTPException(status_code=404, detail="Review task not found")
 
-    # Serialize task with full details
-    task_data = {
-        "id": str(task.id),
-        "market_ref_id": str(task.market_ref_id),
-        "classification_result_id": str(task.classification_result_id),
-        "queue_status": normalize_review_status(task.queue_status),
-        "review_reason_code": task.review_reason_code,
-        "priority": task.priority,
-        "assigned_to": task.assigned_to,
-        "review_payload": task.review_payload,
-        "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-        "market": {
-            "id": str(task.market.id),
-            "market_id": task.market.market_id,
-            "question": task.market.question,
-            "description": task.market.description,
-            "market_status": task.market.market_status,
-        } if task.market else None,
-        "classification_result": {
-            "id": str(task.classification_result.id),
-            "classification_status": task.classification_result.classification_status,
-            "primary_category_code": task.classification_result.primary_category_code,
-            "confidence": float(task.classification_result.confidence) if task.classification_result.confidence else None,
-            "requires_review": task.classification_result.requires_review,
-            "conflict_count": task.classification_result.conflict_count,
-        } if task.classification_result else None,
-    }
-
-    return ReviewTaskDetailResponse(task=task_data)
+    return ReviewTaskDetailResponse(task=_serialize_task_detail(task))
 
 
 @router.post("", response_model=ReviewTaskDetailResponse, status_code=201)
@@ -188,20 +192,7 @@ def create_review_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    task_data = {
-        "id": str(task.id),
-        "market_ref_id": str(task.market_ref_id),
-        "classification_result_id": str(task.classification_result_id),
-        "queue_status": normalize_review_status(task.queue_status),
-        "review_reason_code": task.review_reason_code,
-        "priority": task.priority,
-        "assigned_to": task.assigned_to,
-        "review_payload": task.review_payload,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-    }
-
-    return ReviewTaskDetailResponse(task=task_data)
+    return ReviewTaskDetailResponse(task=_serialize_task_summary(task))
 
 
 @router.patch("/{task_id}", response_model=ReviewTaskDetailResponse)
@@ -236,21 +227,39 @@ def update_review_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    task_data = {
-        "id": str(task.id),
-        "market_ref_id": str(task.market_ref_id),
-        "classification_result_id": str(task.classification_result_id),
-        "queue_status": normalize_review_status(task.queue_status),
-        "review_reason_code": task.review_reason_code,
-        "priority": task.priority,
-        "assigned_to": task.assigned_to,
-        "review_payload": task.review_payload,
-        "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-    }
+    return ReviewTaskDetailResponse(task=_serialize_task_summary(task))
 
-    return ReviewTaskDetailResponse(task=task_data)
+
+@router.post("/bulk-action", response_model=BulkReviewActionResponse)
+def bulk_review_action(
+    request: Request,
+    body: BulkReviewActionRequest,
+    session: Session = Depends(get_db),
+) -> BulkReviewActionResponse:
+    """Apply one review action to multiple tasks."""
+    try:
+        task_ids = [UUID(task_id) for task_id in body.task_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid task ID format")
+
+    review_service = ReviewService(db=session)
+
+    try:
+        tasks = review_service.bulk_apply_action(
+            review_task_ids=task_ids,
+            action=body.action,
+            actor_id=body.actor_id,
+            rejection_reason=body.rejection_reason,
+            notes=body.notes,
+        )
+        session.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return BulkReviewActionResponse(
+        tasks=[_serialize_task_summary(task) for task in tasks],
+        updated_count=len(tasks),
+    )
 
 
 @router.post("/{task_id}/approve", response_model=ReviewTaskDetailResponse)
@@ -278,21 +287,7 @@ def approve_review_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    task_data = {
-        "id": str(task.id),
-        "market_ref_id": str(task.market_ref_id),
-        "classification_result_id": str(task.classification_result_id),
-        "queue_status": normalize_review_status(task.queue_status),
-        "review_reason_code": task.review_reason_code,
-        "priority": task.priority,
-        "assigned_to": task.assigned_to,
-        "review_payload": task.review_payload,
-        "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-    }
-
-    return ReviewTaskDetailResponse(task=task_data)
+    return ReviewTaskDetailResponse(task=_serialize_task_summary(task))
 
 
 @router.post("/{task_id}/reject", response_model=ReviewTaskDetailResponse)
@@ -321,18 +316,4 @@ def reject_review_task(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    task_data = {
-        "id": str(task.id),
-        "market_ref_id": str(task.market_ref_id),
-        "classification_result_id": str(task.classification_result_id),
-        "queue_status": normalize_review_status(task.queue_status),
-        "review_reason_code": task.review_reason_code,
-        "priority": task.priority,
-        "assigned_to": task.assigned_to,
-        "review_payload": task.review_payload,
-        "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
-        "created_at": task.created_at.isoformat(),
-        "updated_at": task.updated_at.isoformat(),
-    }
-
-    return ReviewTaskDetailResponse(task=task_data)
+    return ReviewTaskDetailResponse(task=_serialize_task_summary(task))

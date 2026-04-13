@@ -1,8 +1,10 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 
 import { apiGet, apiPost } from "@/lib/api"
+
+import { PageIntro, SoftPanel } from "../components/page-intro"
 
 type NetEVCandidate = {
   id: string
@@ -10,12 +12,10 @@ type NetEVCandidate = {
   market_id: string | null
   question: string | null
   category_code: string | null
-  calibration_unit_id: string | null
   calibration_sample_count: number | null
   price_bucket: string | null
   time_bucket: string | null
   liquidity_tier: string | null
-  window_type: string | null
   gross_edge: number
   fee_cost: number
   slippage_cost: number
@@ -35,7 +35,6 @@ type NetEVBatchResponse = {
   total: number
   admitted: number
   rejected: number
-  candidates: NetEVCandidate[]
 }
 
 function getErrorMessage(error: unknown): string {
@@ -48,203 +47,29 @@ function getErrorMessage(error: unknown): string {
       return message
     }
   }
-  return "Unexpected error"
+  return "发生了未知错误，请稍后重试"
 }
 
-export default function NetEVPage() {
-  const [candidates, setCandidates] = useState<NetEVCandidate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [filter, setFilter] = useState<"" | "admit" | "reject">("")
-
-  const loadCandidates = async (decision: "" | "admit" | "reject" = filter) => {
-    setLoading(true)
-    setError(null)
-
-    const endpoint = decision ? `/netev/candidates?decision=${decision}` : "/netev/candidates"
-    try {
-      const data = await apiGet<NetEVCandidate[]>(endpoint)
-      setCandidates(data ?? [])
-    } catch (error) {
-      setError(getErrorMessage(error))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadCandidates(filter)
-  }, [filter])
-
-  const handleBatchEvaluate = async () => {
-    setRunning(true)
-    setError(null)
-    setNotice(null)
-
-    try {
-      const result = await apiPost<NetEVBatchResponse>("/netev/evaluate-batch?limit=20&window_type=long")
-      setNotice(
-        `Evaluated ${result.total} candidates. ` +
-          `${result.admitted} admitted and ${result.rejected} rejected.`
-      )
-      await loadCandidates(filter)
-    } catch (error) {
-      setError(getErrorMessage(error))
-    } finally {
-      setRunning(false)
-    }
-  }
-
-  const admitted = candidates.filter((candidate) => candidate.admission_decision === "admit").length
-  const rejected = candidates.length - admitted
+function MetricCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone: "slate" | "emerald" | "rose"
+}) {
+  const toneClassName = {
+    slate: "border-white/10 bg-slate-900/60 text-white",
+    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-50",
+    rose: "border-rose-500/20 bg-rose-500/10 text-rose-50",
+  }[tone]
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Milestone 3</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">NetEV Admission</h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-300">
-            Review cost-adjusted admission decisions built from calibration edge,
-            fees, slippage, dispute discount, scoring, and DQ status.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-500"
-            disabled={running}
-            onClick={handleBatchEvaluate}
-          >
-            {running ? "Evaluating..." : "Evaluate Latest 20"}
-          </button>
-          <FilterButton active={!filter} label="All" onClick={() => setFilter("")} />
-          <FilterButton active={filter === "admit"} label="Admit" onClick={() => setFilter("admit")} />
-          <FilterButton active={filter === "reject"} label="Reject" onClick={() => setFilter("reject")} />
-        </div>
-      </div>
-
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <MetricCard label="Candidates" value={candidates.length.toString()} tone="slate" />
-        <MetricCard label="Admitted" value={admitted.toString()} tone="emerald" />
-        <MetricCard label="Rejected" value={rejected.toString()} tone="rose" />
-      </div>
-
-      {notice && (
-        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {notice}
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-slate-300">
-          Loading NetEV candidates...
-        </div>
-      ) : candidates.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4">
-          {candidates.map((candidate) => (
-            <article
-              key={candidate.id}
-              className={`rounded-2xl border p-5 shadow-xl shadow-slate-950/20 ${
-                candidate.admission_decision === "admit"
-                  ? "border-emerald-500/30 bg-emerald-500/10"
-                  : "border-rose-500/30 bg-rose-500/10"
-              }`}
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl">
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-300/80">
-                    {candidate.category_code || "Uncategorized"} / {candidate.rule_version}
-                  </div>
-                  <h2 className="mt-2 text-lg font-semibold text-white">
-                    {candidate.question || candidate.market_id || candidate.market_ref_id}
-                  </h2>
-                  <div className="mt-2 text-xs text-slate-300/80">
-                    Market ID: <span className="font-mono">{candidate.market_id || candidate.market_ref_id}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200">
-                    {candidate.price_bucket && <Chip label={candidate.price_bucket} />}
-                    {candidate.time_bucket && <Chip label={candidate.time_bucket} />}
-                    {candidate.liquidity_tier && <Chip label={candidate.liquidity_tier} />}
-                    {candidate.calibration_sample_count !== null && (
-                      <Chip label={`Samples ${candidate.calibration_sample_count}`} />
-                    )}
-                    {candidate.dq_status && <Chip label={`DQ ${candidate.dq_status}`} />}
-                    {candidate.scoring_recommendation && (
-                      <Chip label={`Scoring ${candidate.scoring_recommendation}`} />
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
-                      candidate.admission_decision === "admit"
-                        ? "bg-emerald-200 text-emerald-950"
-                        : "bg-rose-200 text-rose-950"
-                    }`}
-                  >
-                    {candidate.admission_decision}
-                  </span>
-                  <div className="mt-2 text-xs text-slate-200/80">
-                    {new Date(candidate.evaluated_at).toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
-                <MetricCard
-                  label="Gross Edge"
-                  value={`${(candidate.gross_edge * 100).toFixed(2)}%`}
-                  tone="emerald"
-                />
-                <MetricCard
-                  label="Fee"
-                  value={`-${(candidate.fee_cost * 100).toFixed(2)}%`}
-                  tone="slate"
-                />
-                <MetricCard
-                  label="Slippage + Dispute"
-                  value={`-${((candidate.slippage_cost + candidate.dispute_discount) * 100).toFixed(2)}%`}
-                  tone="slate"
-                />
-                <MetricCard
-                  label="Net EV"
-                  value={`${(candidate.net_ev * 100).toFixed(2)}%`}
-                  tone={candidate.net_ev >= 0 ? "emerald" : "rose"}
-                />
-              </div>
-
-              {candidate.rejection_reason_code && (
-                <div className="mt-4 rounded-xl bg-black/20 px-4 py-3 text-sm text-slate-100">
-                  <div className="font-medium">
-                    {candidate.rejection_reason_name || candidate.rejection_reason_code}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-300">{candidate.rejection_reason_code}</div>
-                  {candidate.rejection_reason_description && (
-                    <div className="mt-2 text-xs text-slate-300/90">
-                      {candidate.rejection_reason_description}
-                    </div>
-                  )}
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center text-slate-300">
-          No NetEV evaluations yet. Run a batch evaluation to populate this page.
-        </div>
-      )}
-    </main>
+    <div className={`rounded-2xl border p-4 ${toneClassName}`}>
+      <div className="text-[11px] uppercase tracking-[0.22em] text-current/70">{label}</div>
+      <div className="mt-2 text-2xl font-semibold">{value}</div>
+    </div>
   )
 }
 
@@ -259,10 +84,13 @@ function FilterButton({
 }) {
   return (
     <button
-      className={`rounded-lg px-4 py-2 text-sm transition ${
-        active ? "bg-white text-slate-950" : "bg-white/10 text-slate-200 hover:bg-white/15"
-      }`}
+      type="button"
       onClick={onClick}
+      className={`rounded-full border px-4 py-2 text-sm transition ${
+        active
+          ? "border-cyan-300/40 bg-cyan-500/15 text-cyan-50"
+          : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+      }`}
     >
       {label}
     </button>
@@ -270,28 +98,165 @@ function FilterButton({
 }
 
 function Chip({ label }: { label: string }) {
-  return <span className="rounded-full bg-white/10 px-2.5 py-1">{label}</span>
+  return <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-slate-200">{label}</span>
 }
 
-function MetricCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone: "emerald" | "rose" | "slate"
-}) {
-  const toneClassName = {
-    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-100",
-    rose: "border-rose-500/20 bg-rose-500/10 text-rose-100",
-    slate: "border-white/10 bg-white/5 text-slate-100",
-  }[tone]
+export default function NetEVPage() {
+  const [candidates, setCandidates] = useState<NetEVCandidate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [filter, setFilter] = useState<"" | "admit" | "reject">("")
+
+  const loadCandidates = async (decision: "" | "admit" | "reject" = filter) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const endpoint = decision ? `/netev/candidates?decision=${decision}` : "/netev/candidates"
+      const data = await apiGet<NetEVCandidate[]>(endpoint)
+      setCandidates(data ?? [])
+    } catch (fetchError) {
+      setError(getErrorMessage(fetchError))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadCandidates(filter)
+  }, [filter])
+
+  const handleBatchEvaluate = async () => {
+    setRunning(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await apiPost<NetEVBatchResponse>("/netev/evaluate-batch?limit=20&window_type=long")
+      setNotice(`已评估 ${result.total} 个候选，其中 ${result.admitted} 个准入，${result.rejected} 个拒绝。`)
+      await loadCandidates(filter)
+    } catch (submitError) {
+      setError(getErrorMessage(submitError))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const admitted = candidates.filter((candidate) => candidate.admission_decision === "admit").length
+  const rejected = candidates.length - admitted
 
   return (
-    <div className={`rounded-xl border p-4 ${toneClassName}`}>
-      <div className="text-xs uppercase tracking-[0.24em] text-current/70">{label}</div>
-      <div className="mt-3 text-xl font-semibold">{value}</div>
-    </div>
+    <main className="mx-auto max-w-7xl px-4 py-5 md:px-6">
+      <PageIntro
+        eyebrow="NetEV"
+        title="NetEV 准入"
+        description="这页用来回答“这个市场值不值得进”。不要只看最终准入/拒绝，还要一起看 gross edge、费用、滑点、争议折扣，以及 DQ 和 scoring 的约束。"
+        stats={[
+          { label: "当前候选数", value: String(candidates.length) },
+          { label: "准入 / 拒绝", value: `${admitted} / ${rejected}` },
+        ]}
+        guides={[
+          {
+            title: "先看什么",
+            description: "先看最终 admit / reject，再看 NetEV 是否为正，以及 rejection reason 写了什么。",
+          },
+          {
+            title: "什么时候算异常",
+            description: "如果你明明已经跑过批量评估，但这里仍长期为空，才值得继续排查任务执行链路。",
+          },
+          {
+            title: "下一步去哪",
+            description: "准入结果稳定后，再去看 risk、backtests 和 reports 判断能否进入更下游链路。",
+          },
+        ]}
+      />
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleBatchEvaluate}
+          disabled={running}
+          className="rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-500"
+        >
+          {running ? "评估中..." : "评估最近 20 个"}
+        </button>
+        <FilterButton active={!filter} label="全部" onClick={() => setFilter("")} />
+        <FilterButton active={filter === "admit"} label="仅准入" onClick={() => setFilter("admit")} />
+        <FilterButton active={filter === "reject"} label="仅拒绝" onClick={() => setFilter("reject")} />
+      </div>
+
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <MetricCard label="候选数" value={String(candidates.length)} tone="slate" />
+        <MetricCard label="准入" value={String(admitted)} tone="emerald" />
+        <MetricCard label="拒绝" value={String(rejected)} tone="rose" />
+      </div>
+
+      {notice ? (
+        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          {notice}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {error}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-slate-300">
+          正在加载 NetEV 候选...
+        </div>
+      ) : null}
+
+      {!loading && candidates.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-12 text-center text-slate-300">
+          当前还没有 NetEV 评估结果。先执行一次批量评估，再回来判断哪些市场值得准入。
+        </div>
+      ) : null}
+
+      {!loading && candidates.length > 0 ? (
+        <div className="space-y-4">
+          {candidates.map((candidate) => (
+            <SoftPanel
+              key={candidate.id}
+              title={candidate.question || candidate.market_id || candidate.market_ref_id}
+              description={`${candidate.category_code || "未分类"} / ${candidate.rule_version} / ${new Date(candidate.evaluated_at).toLocaleString("zh-CN", { hour12: false })}`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip label={candidate.admission_decision === "admit" ? "准入" : "拒绝"} />
+                {candidate.price_bucket ? <Chip label={candidate.price_bucket} /> : null}
+                {candidate.time_bucket ? <Chip label={candidate.time_bucket} /> : null}
+                {candidate.liquidity_tier ? <Chip label={candidate.liquidity_tier} /> : null}
+                {candidate.calibration_sample_count !== null ? <Chip label={`样本 ${candidate.calibration_sample_count}`} /> : null}
+                {candidate.dq_status ? <Chip label={`DQ ${candidate.dq_status}`} /> : null}
+                {candidate.scoring_recommendation ? <Chip label={`评分 ${candidate.scoring_recommendation}`} /> : null}
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <MetricCard label="毛边际" value={`${(candidate.gross_edge * 100).toFixed(2)}%`} tone="emerald" />
+                <MetricCard label="手续费" value={`-${(candidate.fee_cost * 100).toFixed(2)}%`} tone="slate" />
+                <MetricCard
+                  label="滑点 + 争议折扣"
+                  value={`-${((candidate.slippage_cost + candidate.dispute_discount) * 100).toFixed(2)}%`}
+                  tone="slate"
+                />
+                <MetricCard label="NetEV" value={`${(candidate.net_ev * 100).toFixed(2)}%`} tone={candidate.net_ev >= 0 ? "emerald" : "rose"} />
+              </div>
+
+              {candidate.rejection_reason_code ? (
+                <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-slate-200">
+                  <p className="font-medium">{candidate.rejection_reason_name || candidate.rejection_reason_code}</p>
+                  <p className="mt-1 text-xs text-slate-400">{candidate.rejection_reason_code}</p>
+                  {candidate.rejection_reason_description ? (
+                    <p className="mt-2 text-sm leading-6 text-slate-300">{candidate.rejection_reason_description}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </SoftPanel>
+          ))}
+        </div>
+      ) : null}
+    </main>
   )
 }

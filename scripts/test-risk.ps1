@@ -5,7 +5,7 @@ python -m pytest tests/test_risk_service.py tests/integration/test_api_risk.py -
 if ($LASTEXITCODE -ne 0) { throw "risk pytest failed" }
 
 Write-Host "Running web TypeScript check..." -ForegroundColor Yellow
-npm --workspace apps/web exec -- tsc -- --noEmit
+npm --workspace apps/web exec tsc -- --noEmit
 if ($LASTEXITCODE -ne 0) { throw "web typecheck failed" }
 
 Write-Host "M4 risk automation checks passed." -ForegroundColor Green

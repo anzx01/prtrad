@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 
 import { apiGet, apiPost } from "@/lib/api"
+import { PageIntro } from "../components/page-intro"
 
 type CalibrationUnit = {
   id: string
@@ -38,7 +39,7 @@ function getErrorMessage(error: unknown): string {
       return message
     }
   }
-  return "Unexpected error"
+  return "发生了未知错误，请稍后重试"
 }
 
 export default function CalibrationPage() {
@@ -74,8 +75,8 @@ export default function CalibrationPage() {
     try {
       const result = await apiPost<RecomputeResponse>("/calibration/recompute-all?window_type=long")
       setNotice(
-        `Recomputed ${result.total_units} long-window units. ` +
-          `${result.active_units} are active and ${result.inactive_units} are inactive.`
+        `已重算 ${result.total_units} 个长窗口校准单元，` +
+          `其中 ${result.active_units} 个可用，${result.inactive_units} 个不可用。`
       )
       await loadUnits()
     } catch (error) {
@@ -89,34 +90,49 @@ export default function CalibrationPage() {
   const inactiveUnits = units.length - activeUnits.length
 
   if (loading) {
-    return <div className="p-8 text-slate-300">Loading calibration units...</div>
+    return <div className="p-8 text-slate-300">正在加载校准单元...</div>
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Milestone 3</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Calibration Units</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-300">
-            Historical resolved markets are grouped into reusable calibration units by
-            category, price bucket, time bucket, and liquidity tier.
-          </p>
-        </div>
+    <main className="mx-auto max-w-7xl px-4 py-5 md:px-6">
+      <PageIntro
+        eyebrow="Calibration"
+        title="校准单元"
+        description="这页主要判断历史已结算样本是否足够支撑概率校准。若这里长期全 0，先检查 resolved 市场是否真的同步完整，以及重算是否真正执行。"
+        stats={[
+          { label: "全部单元", value: String(units.length) },
+          { label: "活跃单元", value: String(activeUnits.length) },
+        ]}
+        guides={[
+          {
+            title: "先看什么",
+            description: "先看单元总数和样本数，再看哪些单元被禁用以及禁用原因。",
+          },
+          {
+            title: "什么时候算异常",
+            description: "如果库里已经有大量 resolved 市场，但这里仍然空，才值得继续排查同步与回填链路。",
+          },
+          {
+            title: "下一步怎么做",
+            description: "先重算长窗口；若还为空，再回查 recent resolved markets 和 final_resolution 是否完整。",
+          },
+        ]}
+      />
 
+      <div className="mb-6 flex justify-end">
         <button
-          className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-500"
+          className="rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-500"
           disabled={refreshing}
           onClick={handleRecompute}
         >
-          {refreshing ? "Recomputing..." : "Recompute Long Window"}
+          {refreshing ? "重算中..." : "重算长窗口校准"}
         </button>
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <MetricCard label="All Units" value={units.length.toString()} tone="slate" />
-        <MetricCard label="Active Units" value={activeUnits.length.toString()} tone="emerald" />
-        <MetricCard label="Inactive Units" value={inactiveUnits.toString()} tone="amber" />
+        <MetricCard label="全部单元" value={units.length.toString()} tone="slate" />
+        <MetricCard label="活跃单元" value={activeUnits.length.toString()} tone="emerald" />
+        <MetricCard label="非活跃单元" value={inactiveUnits.toString()} tone="amber" />
       </div>
 
       {notice && (
@@ -136,13 +152,13 @@ export default function CalibrationPage() {
           <table className="min-w-full divide-y divide-white/10 text-sm">
             <thead className="bg-white/5 text-left text-xs uppercase tracking-[0.24em] text-slate-400">
               <tr>
-                <th className="px-5 py-4">Category / Price</th>
-                <th className="px-5 py-4">Time / Liquidity</th>
-                <th className="px-5 py-4">Samples</th>
-                <th className="px-5 py-4">Edge</th>
-                <th className="px-5 py-4">Interval</th>
-                <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Computed</th>
+                <th className="px-5 py-4">类别 / 价格桶</th>
+                <th className="px-5 py-4">时间 / 流动性</th>
+                <th className="px-5 py-4">样本数</th>
+                <th className="px-5 py-4">边际估计</th>
+                <th className="px-5 py-4">区间</th>
+                <th className="px-5 py-4">状态</th>
+                <th className="px-5 py-4">计算时间</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-200">
@@ -178,7 +194,7 @@ export default function CalibrationPage() {
                             : "bg-amber-500/15 text-amber-100"
                         }`}
                       >
-                        {unit.is_active ? "Active" : unit.disabled_reason ?? "Inactive"}
+                        {unit.is_active ? "可用" : unit.disabled_reason ?? "不可用"}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-400">
@@ -189,7 +205,7 @@ export default function CalibrationPage() {
               ) : (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
-                    No calibration units yet. Run a recompute to create the first batch.
+                    当前还没有校准单元。先执行一次重算；若仍为空，再检查 resolved 市场是否真的已同步入库。
                   </td>
                 </tr>
               )}

@@ -18,6 +18,10 @@ from services.ingest.polymarket_client import (
     PolymarketClobClient,
     PolymarketGammaClient,
 )
+from services.market_resolution import (
+    infer_binary_resolution_from_outcome_prices,
+    normalize_binary_resolution,
+)
 
 
 ACTIVE_MARKET_STATUSES = ("active_accepting_orders", "active_open", "active_paused")
@@ -101,6 +105,15 @@ def _normalize_status(market: dict[str, Any]) -> str:
     return "active_paused"
 
 
+def _resolve_final_resolution(
+    raw_final_resolution: Any,
+    outcome_prices: list[Any] | None,
+) -> str | None:
+    return normalize_binary_resolution(raw_final_resolution) or infer_binary_resolution_from_outcome_prices(
+        outcome_prices
+    )
+
+
 def _normalize_market_record(event: dict[str, Any], market: dict[str, Any]) -> NormalizedMarketRecord | None:
     market_id = market.get("id")
     question = market.get("question")
@@ -127,7 +140,7 @@ def _normalize_market_record(event: dict[str, Any], market: dict[str, Any]) -> N
         open_time=_parse_datetime(market.get("startDate") or market.get("acceptingOrdersTimestamp")),
         close_time=_parse_datetime(market.get("closedTime") or market.get("endDate")),
         resolution_time=_parse_datetime(market.get("umaEndDate")),
-        final_resolution=market.get("finalResolution"),
+        final_resolution=_resolve_final_resolution(market.get("finalResolution"), outcome_prices),
         market_status=_normalize_status(market),
         category_raw=category_raw,
         related_tags=tags,
@@ -275,94 +288,98 @@ class PolymarketIngestService:
             "skipped_duplicate_in_run": 0,
             "marked_inactive": 0,
         }
-        offset = 0
         page_size = self._settings.ingest_gamma_page_size
-        # Use a smaller batch size to avoid memory issues
-        batch_size = 1000
 
         with session_scope() as session:
-            # Track seen market IDs in database to avoid memory issues
             seen_market_ids: set[str] = set()
+            seen_active_market_ids: set[str] = set()
 
-            while True:
-                events = self._gamma_client.list_events(
-                    limit=page_size,
-                    offset=offset,
-                    active=True,
-                    closed=False,
-                    archived=False,
-                )
-                if not events:
-                    break
+            for scan_config in self._event_scan_configs(limit_pages=limit_pages):
+                slice_offset = 0
+                slice_pages = 0
 
-                stats["pages"] += 1
-                stats["fetched_events"] += len(events)
+                while True:
+                    events = self._gamma_client.list_events(
+                        limit=page_size,
+                        offset=slice_offset,
+                        active=scan_config["active"],
+                        closed=scan_config["closed"],
+                        archived=scan_config["archived"],
+                        order=scan_config["order"],
+                        ascending=scan_config["ascending"],
+                    )
+                    if not events:
+                        break
 
-                records: list[NormalizedMarketRecord] = []
-                for event in events:
-                    for market in event.get("markets", []):
-                        stats["fetched_markets"] += 1
-                        record = _normalize_market_record(event, market)
-                        if record is None:
-                            stats["skipped_invalid"] += 1
+                    stats["pages"] += 1
+                    stats["fetched_events"] += len(events)
+                    slice_pages += 1
+
+                    records: list[NormalizedMarketRecord] = []
+                    for event in events:
+                        for market in event.get("markets", []):
+                            stats["fetched_markets"] += 1
+                            record = _normalize_market_record(event, market)
+                            if record is None:
+                                stats["skipped_invalid"] += 1
+                                continue
+                            if record.market_id in seen_market_ids:
+                                stats["skipped_duplicate_in_run"] += 1
+                                continue
+                            seen_market_ids.add(record.market_id)
+                            if record.market_status in ACTIVE_MARKET_STATUSES:
+                                seen_active_market_ids.add(record.market_id)
+                            records.append(record)
+
+                    existing_markets = {
+                        market.market_id: market
+                        for market in session.scalars(
+                            select(Market).where(Market.market_id.in_([record.market_id for record in records]))
+                        ).all()
+                    } if records else {}
+
+                    for record in records:
+                        existing = existing_markets.get(record.market_id)
+                        if existing is None:
+                            session.add(self._build_market_model(record))
+                            stats["created"] += 1
                             continue
-                        if record.market_id in seen_market_ids:
-                            stats["skipped_duplicate_in_run"] += 1
+
+                        should_refresh = force_full_scan
+                        record_updated_at = _ensure_utc_datetime(record.source_updated_at)
+                        existing_updated_at = _ensure_utc_datetime(existing.source_updated_at)
+                        if record_updated_at and (
+                            existing_updated_at is None or record_updated_at > existing_updated_at
+                        ):
+                            should_refresh = True
+                        if existing.condition_id is None and record.condition_id is not None:
+                            should_refresh = True
+                        if not existing.clob_token_ids and record.clob_token_ids:
+                            should_refresh = True
+                        if existing.final_resolution is None and record.final_resolution is not None:
+                            should_refresh = True
+
+                        if not should_refresh:
+                            stats["skipped_unchanged"] += 1
                             continue
-                        seen_market_ids.add(record.market_id)
-                        records.append(record)
 
-                        # Clear seen_market_ids periodically to prevent memory growth
-                        if len(seen_market_ids) > batch_size:
-                            seen_market_ids.clear()
+                        self._apply_market_record(existing, record)
+                        stats["updated"] += 1
 
-                existing_markets = {
-                    market.market_id: market
-                    for market in session.scalars(
-                        select(Market).where(Market.market_id.in_([record.market_id for record in records]))
-                    ).all()
-                } if records else {}
+                    session.commit()
 
-                for record in records:
-                    existing = existing_markets.get(record.market_id)
-                    if existing is None:
-                        session.add(self._build_market_model(record))
-                        stats["created"] += 1
-                        continue
-
-                    should_refresh = force_full_scan
-                    record_updated_at = _ensure_utc_datetime(record.source_updated_at)
-                    existing_updated_at = _ensure_utc_datetime(existing.source_updated_at)
-                    if record_updated_at and (
-                        existing_updated_at is None or record_updated_at > existing_updated_at
-                    ):
-                        should_refresh = True
-                    if existing.condition_id is None and record.condition_id is not None:
-                        should_refresh = True
-                    if not existing.clob_token_ids and record.clob_token_ids:
-                        should_refresh = True
-
-                    if not should_refresh:
-                        stats["skipped_unchanged"] += 1
-                        continue
-
-                    self._apply_market_record(existing, record)
-                    stats["updated"] += 1
-
-                session.commit()
-
-                offset += page_size
-                if len(events) < page_size:
-                    break
-                if limit_pages is not None and stats["pages"] >= limit_pages:
-                    break
+                    slice_offset += page_size
+                    if len(events) < page_size:
+                        break
+                    if scan_config["page_limit"] is not None and slice_pages >= scan_config["page_limit"]:
+                        break
 
             if limit_pages is None:
                 active_markets = session.scalars(
                     select(Market).where(Market.market_status.in_(ACTIVE_MARKET_STATUSES))
                 ).all()
                 for market in active_markets:
-                    if market.market_id in seen_market_ids:
+                    if market.market_id in seen_active_market_ids:
                         continue
                     market.market_status = "inactive_from_feed"
                     payload = _coerce_payload_dict(market.source_payload)
@@ -372,6 +389,33 @@ class PolymarketIngestService:
                 session.commit()
 
         return stats
+
+    def _event_scan_configs(self, *, limit_pages: int | None) -> list[dict[str, Any]]:
+        closed_page_limit = limit_pages if limit_pages is not None else self._settings.ingest_closed_market_page_limit
+        configs: list[dict[str, Any]] = [
+            {
+                "active": True,
+                "closed": False,
+                "archived": False,
+                "order": "id",
+                "ascending": True,
+                "page_limit": limit_pages,
+            }
+        ]
+
+        if closed_page_limit and closed_page_limit > 0:
+            configs.append(
+                {
+                    "active": False,
+                    "closed": True,
+                    "archived": False,
+                    "order": "updatedAt",
+                    "ascending": False,
+                    "page_limit": closed_page_limit,
+                }
+            )
+
+        return configs
 
     def capture_snapshots(
         self,

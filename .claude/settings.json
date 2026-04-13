@@ -134,5 +134,8 @@
     "additionalDirectories": [
       "g:\\myaist\\prtrad\\apps\\web\\app\\review"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true
   }
 }

@@ -2,6 +2,15 @@
 
 :root {
   color-scheme: dark;
+  --oa-bg: #0d1117;
+  --oa-bg-secondary: #161b22;
+  --oa-bg-tertiary: #21262d;
+  --oa-border: #30363d;
+  --oa-text: #e6edf3;
+  --oa-muted: #8b949e;
+  --oa-accent: #58a6ff;
+  --oa-green: #3fb950;
+  --oa-red: #f85149;
 }
 
 * {
@@ -10,13 +19,26 @@
 
 html,
 body {
-  margin: 0;
   min-height: 100%;
-  font-family: "Segoe UI", sans-serif;
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Noto Sans CJK SC",
+    sans-serif;
 }
 
 body {
-  background: #06101b;
+  background: var(--oa-bg);
+  color: var(--oa-text);
+  letter-spacing: 0.01em;
+}
+
+main {
+  min-width: 0;
 }
 
 a {
@@ -24,3 +46,181 @@ a {
   text-decoration: none;
 }
 
+::selection {
+  background: rgba(88, 166, 255, 0.22);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--oa-border);
+  border-radius: 999px;
+}
+
+.console-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.console-table thead tr {
+  border-bottom: 1px solid var(--oa-border);
+  color: var(--oa-muted);
+  text-align: left;
+}
+
+.console-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.console-table tbody tr {
+  border-bottom: 1px solid rgba(48, 54, 61, 0.55);
+  transition: background-color 160ms ease;
+}
+
+.console-table tbody tr:hover {
+  background: rgba(177, 186, 196, 0.06);
+}
+
+.console-table td {
+  padding: 0.875rem 1rem;
+  vertical-align: top;
+}
+
+.console-kicker {
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--oa-muted);
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-fade-in {
+  animation: pageFadeIn 160ms ease-out;
+}
+
+/* OpenAlice compatibility skin for legacy page classes */
+[class~="rounded-3xl"],
+[class~="rounded-2xl"],
+[class~="rounded-[28px]"],
+[class~="rounded-[32px]"] {
+  border-radius: 12px !important;
+}
+
+button[class~="rounded-full"],
+a[class~="rounded-full"] {
+  border-radius: 8px !important;
+}
+
+[class~="border-white/10"],
+[class~="border-white/15"] {
+  border-color: var(--oa-border) !important;
+}
+
+[class~="bg-white/5"],
+[class~="bg-white/[0.045]"],
+[class~="bg-black/20"],
+[class~="bg-black/10"],
+[class~="bg-slate-950/50"],
+[class~="bg-slate-950/60"],
+[class~="bg-slate-900/60"] {
+  background-color: var(--oa-bg-secondary) !important;
+}
+
+[class~="backdrop-blur"],
+[class~="backdrop-blur-xl"] {
+  backdrop-filter: none !important;
+}
+
+[class~="border-sky-300/30"],
+[class~="border-sky-300/40"],
+[class~="border-sky-400/30"],
+[class~="border-sky-400/40"] {
+  border-color: rgba(88, 166, 255, 0.35) !important;
+}
+
+[class~="bg-sky-500/10"] {
+  background-color: rgba(31, 111, 235, 0.18) !important;
+}
+
+[class~="hover:bg-sky-500/20"]:hover {
+  background-color: rgba(31, 111, 235, 0.26) !important;
+}
+
+[class~="border-emerald-300/30"],
+[class~="border-emerald-400/30"],
+[class~="border-emerald-500/20"],
+[class~="border-emerald-500/30"] {
+  border-color: rgba(63, 185, 80, 0.32) !important;
+}
+
+[class~="bg-emerald-500/10"] {
+  background-color: rgba(63, 185, 80, 0.14) !important;
+}
+
+[class~="hover:bg-emerald-500/20"]:hover {
+  background-color: rgba(63, 185, 80, 0.22) !important;
+}
+
+[class~="border-amber-400/20"],
+[class~="border-amber-400/30"],
+[class~="border-amber-500/20"] {
+  border-color: rgba(210, 153, 34, 0.36) !important;
+}
+
+[class~="bg-amber-500/10"] {
+  background-color: rgba(210, 153, 34, 0.14) !important;
+}
+
+[class~="hover:bg-amber-500/20"]:hover {
+  background-color: rgba(210, 153, 34, 0.24) !important;
+}
+
+[class~="border-rose-300/30"],
+[class~="border-rose-400/20"],
+[class~="border-rose-400/30"],
+[class~="border-rose-500/20"],
+[class~="border-rose-500/30"] {
+  border-color: rgba(248, 81, 73, 0.34) !important;
+}
+
+[class~="bg-rose-500/10"] {
+  background-color: rgba(248, 81, 73, 0.14) !important;
+}
+
+[class~="hover:bg-rose-500/20"]:hover {
+  background-color: rgba(248, 81, 73, 0.22) !important;
+}
+
+[class~="hover:bg-white/10"]:hover,
+[class~="hover:bg-white/[0.03]"]:hover,
+[class~="hover:bg-white/5"]:hover {
+  background-color: var(--oa-bg-tertiary) !important;
+}
+
+input[class],
+select[class],
+textarea[class] {
+  box-shadow: none !important;
+}

@@ -492,4 +492,4 @@ class ScoringService:
             task_id=self.task_id,
             event_payload=payload,
         )
-        self.audit_service.safe_write_event(event)
+        self.audit_service.safe_write_event(event, session=self.db)

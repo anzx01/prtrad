@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import BacktestRun, KillSwitchRequest, LaunchReview, ShadowRun
+from db.models import BacktestRun, KillSwitchRequest, LaunchReview, M2Report, ShadowRun
 from services.audit import AuditEvent
 
 
@@ -39,17 +39,28 @@ class LaunchReviewService:
         shadow_run_id: uuid.UUID | None = None,
         checklist: list[dict[str, Any]] | None = None,
     ) -> LaunchReview:
+        normalized_stage_name = stage_name.strip() or "M6"
         shadow_run = self.db.get(ShadowRun, shadow_run_id) if shadow_run_id else self._latest_shadow_run()
         latest_backtest = self._latest_backtest_run()
+        latest_stage_review = self._latest_stage_review_report(normalized_stage_name)
         review = LaunchReview(
             id=uuid.uuid4(),
-            title=title.strip() or f"{stage_name.strip() or 'M6'} launch review",
-            stage_name=stage_name.strip() or "M6",
+            title=title.strip() or f"{normalized_stage_name} launch review",
+            stage_name=normalized_stage_name,
             shadow_run_id=shadow_run.id if shadow_run else None,
             requested_by=requested_by.strip(),
             status="pending",
-            checklist=checklist or self._build_default_checklist(shadow_run=shadow_run, backtest_run=latest_backtest),
-            evidence_summary=self._build_evidence_summary(shadow_run=shadow_run, backtest_run=latest_backtest),
+            checklist=checklist
+            or self._build_default_checklist(
+                shadow_run=shadow_run,
+                backtest_run=latest_backtest,
+                stage_review_report=latest_stage_review,
+            ),
+            evidence_summary=self._build_evidence_summary(
+                shadow_run=shadow_run,
+                backtest_run=latest_backtest,
+                stage_review_report=latest_stage_review,
+            ),
             review_notes=None,
             decided_at=None,
         )
@@ -103,15 +114,30 @@ class LaunchReviewService:
     def _latest_backtest_run(self) -> BacktestRun | None:
         return self.db.scalar(select(BacktestRun).order_by(BacktestRun.created_at.desc()).limit(1))
 
+    def _latest_stage_review_report(self, stage_name: str) -> M2Report | None:
+        persisted_type = f"stage_review:{stage_name.strip() or 'M6'}"
+        return self.db.scalar(
+            select(M2Report)
+            .where(M2Report.report_type == persisted_type)
+            .order_by(M2Report.generated_at.desc())
+            .limit(1)
+        )
+
     def _build_default_checklist(
         self,
         *,
         shadow_run: ShadowRun | None,
         backtest_run: BacktestRun | None,
+        stage_review_report: M2Report | None,
     ) -> list[dict[str, Any]]:
         pending_kill_switch = self.db.scalar(
             select(func.count(KillSwitchRequest.id)).where(KillSwitchRequest.status == "pending")
         ) or 0
+        stage_review_payload = stage_review_report.report_data if stage_review_report else None
+        stage_review_passed = (
+            isinstance(stage_review_payload, dict)
+            and str(stage_review_payload.get("decision") or "").strip().lower() == "go"
+        )
         return [
             {
                 "code": "latest_backtest_go",
@@ -129,6 +155,11 @@ class LaunchReviewService:
                 "passed": shadow_run is not None and shadow_run.risk_state not in {"RiskOff", "Frozen"},
             },
             {
+                "code": "latest_stage_review_go",
+                "label": "Latest stage review decision is Go",
+                "passed": stage_review_passed,
+            },
+            {
                 "code": "kill_switch_queue_clear",
                 "label": "No pending kill-switch approvals",
                 "passed": int(pending_kill_switch) == 0,
@@ -140,10 +171,12 @@ class LaunchReviewService:
         *,
         shadow_run: ShadowRun | None,
         backtest_run: BacktestRun | None,
+        stage_review_report: M2Report | None,
     ) -> dict[str, Any]:
         return {
             "latest_backtest": self._serialize_linked_run(backtest_run),
             "latest_shadow_run": self._serialize_linked_run(shadow_run),
+            "latest_stage_review": self._serialize_linked_report(stage_review_report),
         }
 
     def _serialize_linked_run(self, run: BacktestRun | ShadowRun | None) -> dict[str, Any] | None:
@@ -161,6 +194,21 @@ class LaunchReviewService:
             payload["recommendation"] = run.recommendation
             payload["risk_state"] = run.risk_state
         return payload
+
+    def _serialize_linked_report(self, report: M2Report | None) -> dict[str, Any] | None:
+        if report is None:
+            return None
+        decision = None
+        if isinstance(report.report_data, dict):
+            decision = report.report_data.get("decision")
+        return {
+            "id": str(report.id),
+            "report_type": report.report_type,
+            "generated_at": report.generated_at.isoformat(),
+            "report_period_start": report.report_period_start.isoformat(),
+            "report_period_end": report.report_period_end.isoformat(),
+            "decision": decision,
+        }
 
     def _has_failed_checklist(self, checklist: Any) -> bool:
         if not isinstance(checklist, list):

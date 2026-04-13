@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 import uuid
 
-from db.models import DataQualityResult, Market
+from db.models import AuditLog, DataQualityResult, Market, MarketSnapshot
 
 
 def test_get_dq_summary_empty(client):
@@ -13,6 +13,7 @@ def test_get_dq_summary_empty(client):
     assert data["summary"]["total_checks"] == 0
     assert data["summary"]["status_distribution"] == {}
     assert data["summary"]["top_blocking_reasons"] == []
+    assert data["summary"]["latest_snapshot_capture"] is None
     assert data["recent_results"] == []
 
 
@@ -211,6 +212,83 @@ def test_get_dq_summary_limit(client):
     assert response.status_code == 200
     data = response.json()
     assert len(data["recent_results"]) == 5
+
+
+def test_get_dq_summary_includes_snapshot_capture_diagnostics(client):
+    from tests.integration.conftest import TestSessionLocal
+
+    session = TestSessionLocal()
+    checked_at = datetime(2026, 4, 10, 8, 5, tzinfo=UTC)
+    snapshot_time = datetime(2026, 4, 10, 8, 0, tzinfo=UTC)
+    try:
+        market = Market(
+            id=uuid.uuid4(),
+            market_id="snapshot-diagnostics-market",
+            question="Snapshot diagnostics market?",
+            market_status="active_accepting_orders",
+            source_updated_at=datetime.now(UTC),
+        )
+        session.add(market)
+        session.commit()
+
+        session.add(
+            MarketSnapshot(
+                id=uuid.uuid4(),
+                market_ref_id=market.id,
+                snapshot_time=snapshot_time,
+                best_bid_no=Decimal("0.40"),
+                best_ask_no=Decimal("0.50"),
+            )
+        )
+        session.add(
+            DataQualityResult(
+                id=uuid.uuid4(),
+                market_ref_id=market.id,
+                checked_at=checked_at,
+                status="pass",
+                score=Decimal("0.95"),
+                failure_count=0,
+                result_details={"blocking_reason_codes": []},
+                rule_version="v1.0",
+            )
+        )
+        session.add(
+            AuditLog(
+                id=uuid.uuid4(),
+                actor_id="worker.ingest.capture_active_market_snapshots",
+                actor_type="system",
+                object_type="market_snapshot_capture",
+                object_id=snapshot_time.isoformat(),
+                action="execute",
+                result="success",
+                task_id="snapshot-task-1",
+                event_payload={
+                    "selected_markets": 200,
+                    "created": 198,
+                    "skipped_existing": 0,
+                    "skipped_missing_mapping": 2,
+                    "skipped_missing_order_books": 1,
+                    "book_fetch_failed_tokens": 3,
+                    "created_from_source_payload": 1,
+                },
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get("/dq/summary")
+    assert response.status_code == 200
+    data = response.json()
+    capture = data["summary"]["latest_snapshot_capture"]
+    assert capture["task_id"] == "snapshot-task-1"
+    assert capture["selected_markets"] == 200
+    assert capture["created"] == 198
+    assert capture["skipped_missing_mapping"] == 2
+    assert capture["book_fetch_failed_tokens"] == 3
+    assert capture["created_from_source_payload"] == 1
+    assert capture["triggered_at"] == snapshot_time.isoformat()
+    assert capture["source_payload_fallback_enabled"] is True
 
 
 def test_get_market_dq_result(client):

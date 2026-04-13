@@ -68,7 +68,19 @@
       "Bash(curl -s http://localhost:8000/openapi.json)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); paths=[p for p in d['paths'] if '/risk' in p]; print\\('\\\\n'.join\\(paths\\)\\)\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); paths=[p for p in d['paths'] if '/risk' in p]; print\\('\\\\n'.join\\(paths\\) if paths else 'no risk paths yet'\\)\")",
-      "Bash(ls g:/myaist/prtrad/scripts/*.sh)"
+      "Bash(ls g:/myaist/prtrad/scripts/*.sh)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "Read(//c/Users/DELL/.claude/plugins\" 2>/dev/**)",
+      "Read(//c/Users/DELL/.claude/plugins//**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\DELL\\.claude\\plugins",
+      "C:\\Users\\DELL\\.claude\\plugins\\cache"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true
   }
 }
