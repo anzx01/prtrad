@@ -141,6 +141,8 @@ def capture_active_market_snapshots(
             "skipped_existing": result.get("skipped_existing"),
             "skipped_missing_mapping": result.get("skipped_missing_mapping"),
             "skipped_missing_order_books": result.get("skipped_missing_order_books"),
+            "book_fetch_failed_tokens": result.get("book_fetch_failed_tokens"),
+            "created_from_source_payload": result.get("created_from_source_payload"),
         },
     )
     logger.info(
