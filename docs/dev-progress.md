@@ -1,7 +1,42 @@
 # 开发进度
 
+## 2026-04-18
+
+### 今日完成
+
+- 按 `2026-04-13` 记录继续推进 DQ 排障链路，优先补齐了“按原因码聚焦最新批次样本”的能力。
+- 后端新增 `/dq/reasons/{reason_code}`：
+  - 只读取最新一批 DQ 结果，避免把旧批次噪音混进排查结论。
+  - 对每个命中样本直接返回 `market_id`、匹配的 DQ checks、`blocking_reason_codes / warning_reason_codes`。
+  - 同时返回 `creation/open/close/resolution/source_updated_at` 与 `latest_snapshot_time / previous_snapshot_time`，便于判断是规则阈值问题还是时序问题。
+- 为避免把解析逻辑继续堆进路由文件，新增 `apps/api/services/dq/reason_samples.py`，集中承载原因码样本的响应模型与提取逻辑。
+- 新增脚本入口：
+  - `scripts/investigate-dq-reason.ps1`
+  - `npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK`
+- README 已同步补充该排障入口，方便直接按原因码查看最新批次 Top 样本。
+- 清理了 `docs/dev-progress.md` 顶部遗留的冲突标记，恢复进度文档可读状态。
+
+### 验证结果
+
+- `python -m pytest tests/integration/test_api_dq.py tests/integration/test_api_dq_reason.py -q` -> `11 passed`
+- `scripts/investigate-dq-reason.ps1` 已通过 PowerShell 语法解析校验。
+
+### 当前状态
+
+- `REJ_DATA_LEAK_RISK` 已不需要再靠手工翻 `/dq/markets/{market_id}` 逐条排查。
+- 现在可以直接基于最新批次，按原因码查看命中样本和对应时间字段，快速区分“规则触发过严”与“源数据时序异常”。
+- “快照 -> DQ -> summary 校验”的统一基线脚本入口仍未补齐，这一项继续保留在下一步。
+
+### 下一步
+
+- 对本地最新一批真实 DQ 数据执行：
+  - `npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK`
+- 根据命中的 checks 与时间字段，判断是否需要：
+  - 调整 DQ 时间规则阈值
+  - 修正 ingest 的时间归一化/快照时序
+- 继续补“快照 -> DQ -> summary 校验”的统一脚本入口，降低队列时序对健康检查结论的污染。
+
 ## 2026-04-13
-<<<<<<< HEAD
 
 ### 今日完成
 
@@ -53,8 +88,6 @@
 - 补一条脚本化健康检查入口（`scripts/`），把“快照 -> DQ -> summary 校验”固化为单命令，降低队列时序影响。
 
 ## 2026-04-10
-=======
->>>>>>> 8475d74df45d02c0108b05063356955b5b69a720
 
 ### 今日完成
 

@@ -100,6 +100,7 @@ npm run task:dq-run
 npm run task:tagging-run
 npm run task:refresh-evidence-pack
 npm run health:dq
+npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
 ```
 
 测试：
@@ -252,6 +253,17 @@ python -m pytest -q
   - source payload 降级快照
   - `/dq` 页面快照抓取诊断
   - `npm run health:dq`
+- 如果 `top_blocking_reasons` 里 `REJ_DATA_LEAK_RISK` 偏高，可直接跑：
+
+```powershell
+npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
+```
+
+- 该脚本会聚焦最新一批 DQ 结果里命中该原因码的市场，直接输出：
+  - `market_id`
+  - 触发的具体 DQ check
+  - `creation/open/close/resolution`
+  - `latest_snapshot_time / previous_snapshot_time`
 
 ### 2. Calibration Units 全是 0
 
