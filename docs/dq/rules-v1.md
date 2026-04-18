@@ -96,7 +96,6 @@ Wave 1 默认按以下顺序选取市场：
 - 原因码：`REJ_DATA_LEAK_RISK`
 - 检查项：
   - `snapshot_time > checked_at + DQ_SNAPSHOT_FUTURE_TOLERANCE_SECONDS`
-  - 活跃市场的 `snapshot_time > close_time`
 
 ### 9. 盘口一致性异常
 

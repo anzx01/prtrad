@@ -505,7 +505,6 @@ class MarketDataQualityService:
     ) -> list[DQCheckResult]:
         checks: list[DQCheckResult] = []
         snapshot_time = _ensure_utc_datetime(snapshot.snapshot_time)
-        close_time = _ensure_utc_datetime(market.close_time)
         tolerance_seconds = self._settings.dq_snapshot_future_tolerance_seconds
 
         if snapshot_time is not None:
@@ -522,17 +521,6 @@ class MarketDataQualityService:
                         details={"delta_seconds": int(delta_seconds)},
                     )
                 )
-        if close_time and snapshot_time and snapshot_time > close_time and market.market_status in ACTIVE_MARKET_STATUSES:
-            checks.append(
-                DQCheckResult(
-                    code="DQ_ACTIVE_MARKET_SNAPSHOT_AFTER_CLOSE",
-                    status="fail",
-                    severity="error",
-                    message="活跃市场的最新快照时间晚于 close_time。",
-                    blocking=True,
-                    reason_code="REJ_DATA_LEAK_RISK",
-                )
-            )
         return checks
 
     def _check_snapshot_consistency(self, snapshot: MarketSnapshot) -> list[DQCheckResult]:

@@ -19,7 +19,7 @@ function Format-OptionalValue {
 }
 
 $escapedReasonCode = [System.Uri]::EscapeDataString($ReasonCode)
-$response = Invoke-RestMethod -Method Get -Uri "$ApiBaseUrl/dq/reasons/$escapedReasonCode?limit=$Limit"
+$response = Invoke-RestMethod -Method Get -Uri "$ApiBaseUrl/dq/reasons/${escapedReasonCode}?limit=$Limit"
 
 Write-Host "DQ reason focus" -ForegroundColor Cyan
 Write-Host ("  reason_code: {0}" -f $response.reason_code)

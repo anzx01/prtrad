@@ -101,6 +101,7 @@ npm run task:tagging-run
 npm run task:refresh-evidence-pack
 npm run health:dq
 npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
+npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
 ```
 
 测试：
@@ -264,6 +265,24 @@ npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
   - 触发的具体 DQ check
   - `creation/open/close/resolution`
   - `latest_snapshot_time / previous_snapshot_time`
+- 如果页面看起来“几乎全是 fail”，但 `freshness_status=fresh`，优先再查一次 `REJ_DATA_LEAK_RISK`：
+
+```powershell
+npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
+```
+
+- 2026-04-18 的一次真实排障结论是：
+  - 大量 fail 不是未来快照真的泄漏，而是旧规则把“active 市场的 `snapshot_time > close_time`”直接判成了 `REJ_DATA_LEAK_RISK`
+  - 上游 payload 在部分市场上会出现 `close_time` 已过但 `accepting_orders=true` 仍保持为真的情况
+  - 当前 DQ 已移除这条阻断规则，只保留真正的未来时间检查：`snapshot_time > checked_at + tolerance`
+  - 修复后最新一批基线已收敛到：`pass=1, warn=184, fail=15`，且 `REJ_DATA_LEAK_RISK=0`
+- 修复后如果还有 fail，当前应优先看：
+
+```powershell
+npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
+```
+
+- 这批剩余 fail 更可能是快照缺字段，而不是时间泄漏误判。
 
 ### 2. Calibration Units 全是 0
 

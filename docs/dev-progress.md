@@ -15,25 +15,46 @@
   - `npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK`
 - README 已同步补充该排障入口，方便直接按原因码查看最新批次 Top 样本。
 - 清理了 `docs/dev-progress.md` 顶部遗留的冲突标记，恢复进度文档可读状态。
+- 针对“数据质量看板几乎全是 fail”继续收口：
+  - 复核确认主因不是 `DQ_SNAPSHOT_STALE`，而是 `REJ_DATA_LEAK_RISK` 大量来自 `DQ_ACTIVE_MARKET_SNAPSHOT_AFTER_CLOSE`
+  - 核对本地库与上游 payload 后，确认大量市场在 `close_time` 已过时仍保持 `accepting_orders=true`
+  - 将“活跃市场的 snapshot_time 晚于 close_time”从 DQ 阻断规则中移除，只保留真正的 `snapshot_time > checked_at + tolerance` 未来时间检查
+  - 修复 `scripts/investigate-dq-reason.ps1` 的参数拼接问题，恢复按原因码排障脚本可用
+- 为避免回归，新增单测覆盖“active 市场即使 snapshot 晚于 close_time，也不应直接判成 `REJ_DATA_LEAK_RISK`”。
+- 额外执行了一轮手动基线复跑（snapshot -> DQ），并补写对应审计日志，确保看板最新批次直接切到修复后结果。
+- README 已继续补充这次 DQ 误杀排障说明，明确：
+  - “fresh 但几乎全 fail”时优先排查 `REJ_DATA_LEAK_RISK`
+  - 修复后的最新基线结果
+  - 下一步应转向 `REJ_DATA_INCOMPLETE` 样本
 
 ### 验证结果
 
 - `python -m pytest tests/integration/test_api_dq.py tests/integration/test_api_dq_reason.py -q` -> `11 passed`
 - `scripts/investigate-dq-reason.ps1` 已通过 PowerShell 语法解析校验。
+- `python -m pytest tests/test_dq_service.py tests/integration/test_api_dq.py tests/integration/test_api_dq_reason.py -q` -> `16 passed`
+- 手动复跑后的 `/dq/summary?limit=10` 最新结果（2026-04-18）：
+  - `latest_checked_at`: `2026-04-18T15:01:52`
+  - `status_distribution`: `pass=1, warn=184, fail=15`
+  - `freshness_status`: `fresh`
+  - `top_blocking_reasons`: `REJ_DATA_INCOMPLETE=15`
+- `/dq/reasons/REJ_DATA_LEAK_RISK?limit=5` 最新结果（2026-04-18）：
+  - `total_matches`: `0`
 
 ### 当前状态
 
 - `REJ_DATA_LEAK_RISK` 已不需要再靠手工翻 `/dq/markets/{market_id}` 逐条排查。
 - 现在可以直接基于最新批次，按原因码查看命中样本和对应时间字段，快速区分“规则触发过严”与“源数据时序异常”。
+- “数据质量看板几乎全是 fail”的直接误杀已解除，当前 fail 已收敛到 `REJ_DATA_INCOMPLETE` 的少量样本。
+- 现在的主要剩余问题不再是时间泄漏误判，而是少数市场快照缺字段导致的真实阻断。
 - “快照 -> DQ -> summary 校验”的统一基线脚本入口仍未补齐，这一项继续保留在下一步。
 
 ### 下一步
 
-- 对本地最新一批真实 DQ 数据执行：
-  - `npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK`
-- 根据命中的 checks 与时间字段，判断是否需要：
-  - 调整 DQ 时间规则阈值
-  - 修正 ingest 的时间归一化/快照时序
+- 对剩余 `REJ_DATA_INCOMPLETE` 样本执行：
+  - `npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE`
+- 按缺失字段类型继续细分：
+  - 是单边盘口天然缺值，应降级为 warning
+  - 还是快照构造逻辑确实漏填，应补 ingest / snapshot 计算
 - 继续补“快照 -> DQ -> summary 校验”的统一脚本入口，降低队列时序对健康检查结论的污染。
 
 ## 2026-04-13
