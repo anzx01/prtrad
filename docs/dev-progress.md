@@ -1,5 +1,87 @@
 # 开发进度
 
+## 2026-04-19
+### 补充记录（calibration / CORS）
+
+- 继续收口 `/calibration` 点击操作报“无法连接 API / CORS”问题，确认真实根因不是前端跨域配置，而是后端 `POST /calibration/recompute-all` 在大批量 resolved market 下触发 SQLite `too many SQL variables`。
+- 修复 `apps/api/services/calibration/service.py`：将 `_load_historical_samples()` 中按 `market_ref_id.in_(...)` 一次性拉取 snapshot 的逻辑改为分块查询，避免 SQLite 参数上限导致 500。
+- 修复 `apps/api/app/main.py`：
+  - 补统一未处理异常响应，返回标准 JSON 错误体与 `request_id`
+  - 对本地开发 origin 的 500 响应补齐 `Access-Control-Allow-Origin` / `Access-Control-Allow-Credentials`
+  - 同时把 `x-request-id` 写回错误响应头，便于前端提示和日志排查对齐
+- 验证：`python -m pytest tests/test_calibration_service.py tests/integration/test_api_calibration.py tests/integration/test_api_cors.py -q` -> `12 passed`
+- 当前状态：`/calibration` 的“长窗口重算”真实阻塞点已经解除；此前浏览器里看到的 CORS 只是 500 响应未带 ACAO 头后的表象。现在即使后端再抛未处理异常，前端也应拿到带 `request_id` 的 JSON 500，而不是只看到模糊的“无法连接 API”。
+
+### 今日完成
+
+- 按 `2026-04-18` 的下一步继续推进 DQ 排障，先把 `REJ_DATA_INCOMPLETE` 的字段级细分补成现成输出，而不是继续只看原始样本。
+- 扩展 `/dq/reasons/{reason_code}` 返回结构：
+  - 新增 `check_counts`，聚合同一原因码下命中的 DQ check 频次
+  - 新增 `missing_field_counts`，从 `details.missing_fields` 中直接汇总缺失字段及对应 check 来源
+  - 保持原有 `samples` 明细输出不变，兼顾聚合视图与逐条排障
+- 更新 `scripts/investigate-dq-reason.ps1`：
+  - 输出 `matching check` 聚合计数
+  - 输出 `missing_fields` 聚合计数
+  - 这样在排查 `REJ_DATA_INCOMPLETE` 时，不需要再手工翻每条样本的 `details`
+- 新增统一 DQ 基线脚本入口：
+  - `scripts/run_dq_baseline.py`
+  - `scripts/run-dq-baseline.ps1`
+  - `npm run dq:baseline`
+- 新基线脚本的行为是：
+  - 直接同步执行 `capture_snapshots` 与 DQ 服务，不经过 Celery 队列
+  - 按本次刚生成的 `checked_at` 批次做汇总，避免被其他定时批次串扰
+  - 默认顺带聚焦 `REJ_DATA_INCOMPLETE`，直接输出 `check_counts` 与 `missing_field_counts`
+  - 同步补写 `market_snapshot_capture.execute`、`market_dq_scan.execute` 与 `dq_baseline_check.execute` 审计日志，保证后续看板与排障日志都能对齐这次基线执行
+- README 与 `package.json` 已同步补充新的基线命令入口和使用说明。
+- 修正 `/review/[id]` 详情页在“分类结果缺失”场景下的误导文案：
+  - 顶部“什么时候批准/什么时候拒绝”改为按数据状态动态提示
+  - 若 `classification_result` 缺失，则回退展示 `review_payload` 中的分类快照字段
+  - 当连主类别都没有时，页面明确提示“不建议直接批准”，并禁用批准按钮，避免把“无结论任务”错误放行
+- 继续收口审核工作台的可解释性：
+  - 前端新增审核原因码中文映射与解释，覆盖 `TAG_NO_CATEGORY_MATCH / TAG_CATEGORY_CONFLICT / TAG_NO_BUCKET_MATCH / TAG_LOW_CONFIDENCE / TAG_BLACKLIST_MATCH` 等常见原因
+  - `/review` 列表、`/review/[id]` 详情页、首页智能驾驶舱中的待审样例原因，均改为优先显示中文解释，不再直接裸露原始码值
+- 修正前端对“无请求体 POST”的调用方式：
+  - `apps/web/lib/api.ts` 现在仅在真正有 body 时才附带 `Content-Type: application/json`
+  - 避免像 `/calibration/recompute-all`、`/risk/exposures/compute` 这类 bodyless POST 被浏览器升级成不必要的 CORS 预检请求
+  - 同时把网络错误文案改成中文，并明确提示“页面数据能加载但点击动作报错”时更像是预检或跨域拦截问题
+
+### 验证结果
+
+- `python -m pytest tests/test_dq_service.py tests/integration/test_api_dq.py tests/integration/test_api_dq_reason.py -q` -> `17 passed`
+- `powershell -Command "[scriptblock]::Create((Get-Content '.\\scripts\\run-dq-baseline.ps1' -Raw)) | Out-Null; [scriptblock]::Create((Get-Content '.\\scripts\\investigate-dq-reason.ps1' -Raw)) | Out-Null"` -> `passed`
+- `.venv\Scripts\python.exe scripts/run_dq_baseline.py --help` -> `passed`
+- `npm run dq:baseline -- -ReasonLimit 5` -> `passed`
+  - `selected_markets=200`
+  - `capture.created=194`
+  - `dq.pass=9, dq.warn=185, dq.fail=6`
+  - `freshness_status=fresh`
+  - `top_blocking_reasons=REJ_DATA_INCOMPLETE=6, REJ_DATA_STALE=6`
+  - `REJ_DATA_INCOMPLETE` 聚合缺失字段：`best_ask_no=6, best_bid_yes=6, spread=6`
+- `npm --workspace apps/web exec tsc -- --noEmit` -> `passed`
+
+### 当前状态
+
+- `REJ_DATA_INCOMPLETE` 已不再只能靠逐条样本肉眼比对，原因码接口和脚本都能直接给出字段缺失聚合。
+- “快照 -> DQ -> summary 校验”的统一脚本入口已补齐，且这次是按本次执行批次汇总，不再混读其他队列批次。
+- `health:dq` 仍适合做只读健康检查；需要主动重跑一轮同步基线时，应改用 `dq:baseline`。
+- 当前最新同步基线的 fail 已降到 `6`，并且这 `6` 条都集中在 `DQ_SNAPSHOT_REQUIRED_FIELDS_MISSING`，不再是此前的大面积时间泄漏误判。
+- 当前最值得继续追的字段组合已经收敛到：`best_ask_no / best_bid_yes / spread`。
+
+### 下一步
+
+- 在真实本地数据上执行：
+  - `npm run dq:baseline`
+  - `npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE`
+- 根据 `missing_field_counts` 继续收敛：
+  - 哪些字段属于单边盘口天然缺值，应从阻断降级为 warning
+  - 哪些字段说明 snapshot 构造逻辑确实漏填，应回到 ingest / snapshot 计算修复
+- 优先确认 `best_ask_no / best_bid_yes / spread` 这组缺失是否共同指向“盘口天然只有单边报价”的场景；如果是，应优先讨论 DQ 降级规则，而不是先改抓取链路。
+- 若字段聚合模式稳定，再考虑是否把这些聚合结果前移到 `/dq` 页面，减少排障时在终端与页面之间来回切换。
+
+### 风险与备注
+
+- 当前 `.venv` 内未安装 `pytest`，本次回归使用的是系统 `python -m pytest`；仓库脚本默认 Python 入口暂未统一调整，后续如继续收口开发环境，需要补齐这一差异。
+
 ## 2026-04-18
 
 ### 今日完成

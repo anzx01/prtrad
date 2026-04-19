@@ -4,6 +4,7 @@ import type {
   DashboardSnapshot,
   WorkflowCard,
 } from "./types"
+import { formatReviewReasonDisplay } from "@/lib/review"
 import {
   formatCount,
   formatDateTime,
@@ -43,7 +44,7 @@ export function buildNarratives(snapshot: DashboardSnapshot): DashboardNarrative
     pushNarrative(narratives, {
       id: "review-backlog",
       title: "人工审核积压是当前最明显的学习成本",
-      body: `Review Queue 里还有 ${formatCount(pendingReviews)} 条 pending。样例原因是 ${topReviewReason ?? "未分类"}，说明很多问题不是系统没跑，而是结果还在等人工接住。`,
+      body: `Review Queue 里还有 ${formatCount(pendingReviews)} 条 pending。样例原因是 ${formatReviewReasonDisplay(topReviewReason)}，说明很多问题不是系统没跑，而是结果还在等人工接住。`,
       tone: pendingReviews > 500 ? "bad" : "warn",
       href: "/review",
     })

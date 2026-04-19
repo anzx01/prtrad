@@ -26,6 +26,24 @@ Write-Host ("  reason_code: {0}" -f $response.reason_code)
 Write-Host ("  latest_checked_at: {0}" -f (Format-OptionalValue $response.latest_checked_at))
 Write-Host ("  total_matches: {0}" -f $response.total_matches)
 
+if ($response.check_counts) {
+    Write-Host "Matching check counts" -ForegroundColor Cyan
+    foreach ($item in $response.check_counts) {
+        Write-Host ("  {0}: {1}" -f (Format-OptionalValue $item.code), (Format-OptionalValue $item.count))
+    }
+}
+
+if ($response.missing_field_counts) {
+    Write-Host "Missing field counts" -ForegroundColor Cyan
+    foreach ($item in $response.missing_field_counts) {
+        $checkCodes = if ($item.check_codes) { $item.check_codes -join "," } else { "-" }
+        Write-Host ("  {0}: {1} (checks={2})" -f `
+            (Format-OptionalValue $item.field_name), `
+            (Format-OptionalValue $item.count), `
+            $checkCodes)
+    }
+}
+
 if ($null -eq $response.samples -or $response.samples.Count -eq 0) {
     Write-Host "No matching samples found." -ForegroundColor Green
     return

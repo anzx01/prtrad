@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from typing import Any
 
 from pydantic import BaseModel
@@ -39,10 +40,23 @@ class DQReasonSamplePayload(BaseModel):
     timestamps: DQReasonTimestampsPayload
 
 
+class DQReasonCheckCountPayload(BaseModel):
+    code: str
+    count: int
+
+
+class DQReasonMissingFieldCountPayload(BaseModel):
+    field_name: str
+    count: int
+    check_codes: list[str]
+
+
 class DQReasonSamplesResponse(BaseModel):
     reason_code: str
     latest_checked_at: str | None
     total_matches: int
+    check_counts: list[DQReasonCheckCountPayload]
+    missing_field_counts: list[DQReasonMissingFieldCountPayload]
     samples: list[DQReasonSamplePayload]
 
 
@@ -92,3 +106,46 @@ def extract_snapshot_time(result_details: dict[str, Any], key: str) -> str | Non
     if snapshot_time in (None, ""):
         return None
     return str(snapshot_time)
+
+
+def summarize_matching_check_counts(samples: list[DQReasonSamplePayload]) -> list[DQReasonCheckCountPayload]:
+    counter: Counter[str] = Counter()
+    for sample in samples:
+        for check in sample.matching_checks:
+            if check.code:
+                counter[check.code] += 1
+
+    return [
+        DQReasonCheckCountPayload(code=code, count=count)
+        for code, count in counter.most_common()
+    ]
+
+
+def summarize_missing_field_counts(samples: list[DQReasonSamplePayload]) -> list[DQReasonMissingFieldCountPayload]:
+    counter: Counter[str] = Counter()
+    field_check_codes: dict[str, set[str]] = defaultdict(set)
+
+    for sample in samples:
+        for check in sample.matching_checks:
+            if not isinstance(check.details, dict):
+                continue
+            missing_fields = check.details.get("missing_fields")
+            if not isinstance(missing_fields, list):
+                continue
+
+            for field in missing_fields:
+                if field in (None, ""):
+                    continue
+                field_name = str(field)
+                counter[field_name] += 1
+                if check.code:
+                    field_check_codes[field_name].add(check.code)
+
+    return [
+        DQReasonMissingFieldCountPayload(
+            field_name=field_name,
+            count=count,
+            check_codes=sorted(field_check_codes.get(field_name, set())),
+        )
+        for field_name, count in counter.most_common()
+    ]

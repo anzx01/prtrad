@@ -100,6 +100,7 @@ npm run task:dq-run
 npm run task:tagging-run
 npm run task:refresh-evidence-pack
 npm run health:dq
+npm run dq:baseline
 npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
 npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
 ```
@@ -260,29 +261,60 @@ python -m pytest -q
 npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
 ```
 
+- 如果想避开队列延迟，重新跑一轮“同步快照 -> 同步 DQ -> 同批次汇总校验”，可直接执行：
+
+```powershell
+npm run dq:baseline
+```
+
+- 这个脚本会：
+  - 直接同步调用 `capture_snapshots` 与 DQ 服务，不经过 Celery 队列
+  - 给本次同步执行补写 `market_snapshot_capture.execute` 与 `market_dq_scan.execute` 审计日志
+  - 按本次刚生成的 `checked_at` 批次输出汇总，而不是去混读别的定时批次
+  - 默认顺带聚焦 `REJ_DATA_INCOMPLETE`，直接汇总 `matching check` 计数和 `missing_fields` 计数
+- 可选示例：
+
+```powershell
+npm run dq:baseline -- -MarketLimit 50 -ReasonCode REJ_DATA_INCOMPLETE -ReasonLimit 5
+```
+
+- 脚本日志会写入：
+
+```text
+logs/dq-baseline-*.log
+```
+
 - 该脚本会聚焦最新一批 DQ 结果里命中该原因码的市场，直接输出：
   - `market_id`
   - 触发的具体 DQ check
   - `creation/open/close/resolution`
   - `latest_snapshot_time / previous_snapshot_time`
+- 现在也会额外输出：
+  - `matching check` 聚合计数
+  - `missing_fields` 聚合计数（适合直接看 `REJ_DATA_INCOMPLETE`）
 - 如果页面看起来“几乎全是 fail”，但 `freshness_status=fresh`，优先再查一次 `REJ_DATA_LEAK_RISK`：
 
 ```powershell
 npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
 ```
 
-- 2026-04-18 的一次真实排障结论是：
+- 2026-04-19 的最新一次同步基线结果是：
   - 大量 fail 不是未来快照真的泄漏，而是旧规则把“active 市场的 `snapshot_time > close_time`”直接判成了 `REJ_DATA_LEAK_RISK`
   - 上游 payload 在部分市场上会出现 `close_time` 已过但 `accepting_orders=true` 仍保持为真的情况
   - 当前 DQ 已移除这条阻断规则，只保留真正的未来时间检查：`snapshot_time > checked_at + tolerance`
-  - 修复后最新一批基线已收敛到：`pass=1, warn=184, fail=15`，且 `REJ_DATA_LEAK_RISK=0`
+  - 最新同步基线已收敛到：`pass=9, warn=185, fail=6`
+  - 当前阻断主因已集中到：`REJ_DATA_INCOMPLETE=6`
 - 修复后如果还有 fail，当前应优先看：
 
 ```powershell
 npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
 ```
 
-- 这批剩余 fail 更可能是快照缺字段，而不是时间泄漏误判。
+- 这批剩余 fail 目前集中缺失：
+  - `best_ask_no`
+  - `best_bid_yes`
+  - `spread`
+- 也就是说，当前更像是单边盘口 / 快照字段缺失问题，而不是时间泄漏误判。
 
 ### 2. Calibration Units 全是 0
 

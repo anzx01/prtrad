@@ -1,7 +1,9 @@
 import logging
+import re
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.logging_utils import bind_log_context, configure_logging
@@ -35,6 +37,8 @@ app = FastAPI(title="Polymarket Tail Risk API", version="0.1.0")
 logger = logging.getLogger("ptr.api")
 LOCAL_DEV_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
+app.middleware("http")(request_context_middleware)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -43,8 +47,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.middleware("http")(request_context_middleware)
 
 # Register routers
 app.include_router(markets.router)
@@ -62,6 +64,32 @@ app.include_router(risk.router)
 app.include_router(backtests.router)
 app.include_router(shadow.router)
 app.include_router(launch_review.router)
+
+
+def _build_error_response_headers(request: Request, request_id: str) -> dict[str, str]:
+    headers = {"x-request-id": request_id}
+    origin = request.headers.get("origin")
+    if origin and re.match(LOCAL_DEV_ORIGIN_REGEX, origin):
+        headers["access-control-allow-origin"] = origin
+        headers["access-control-allow-credentials"] = "true"
+        headers["vary"] = "Origin"
+    return headers
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", "-")
+    bound_logger = bind_log_context(logger, request_id=request_id)
+    bound_logger.exception("Unhandled API exception on %s %s", request.method, request.url.path)
+
+    return JSONResponse(
+        status_code=500,
+        headers=_build_error_response_headers(request, request_id),
+        content={
+            "detail": "内部服务异常，请稍后重试。",
+            "request_id": request_id,
+        },
+    )
 
 
 @app.get("/health")

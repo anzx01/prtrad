@@ -37,7 +37,7 @@ function buildNetworkError(url: string, error: unknown): ApiRequestError {
 
   return new ApiRequestError({
     status: 0,
-    message: `Unable to reach API server at ${API_URL}. Make sure the API is running and that CORS allows the current web origin.`,
+    message: `无法连接 API 服务：${API_URL}。请确认 API 已启动；如果页面数据能加载但点击操作时报错，更可能是浏览器拦截了跨域预检请求。`,
     details: `${url} :: ${details}`,
   })
 }
@@ -85,13 +85,19 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
   console.log(`[API] POST ${url}`, body)
 
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    }
+    let serializedBody: string | undefined
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json"
+      serializedBody = JSON.stringify(body)
+    }
+
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: body ? JSON.stringify(body) : undefined,
+      headers,
+      body: serializedBody,
     })
 
     if (!response.ok) {

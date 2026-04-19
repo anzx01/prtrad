@@ -13,6 +13,8 @@ from app.config import get_settings
 from db.models import AuditLog, DataQualityResult, Market, MarketSnapshot
 from db.session import get_db
 from services.dq.reason_samples import (
+    DQReasonCheckCountPayload,
+    DQReasonMissingFieldCountPayload,
     DQReasonSamplePayload,
     DQReasonSamplesResponse,
     DQReasonTimestampsPayload,
@@ -20,7 +22,10 @@ from services.dq.reason_samples import (
     coerce_result_details,
     extract_matching_checks,
     extract_snapshot_time,
+    summarize_matching_check_counts,
+    summarize_missing_field_counts,
 )
+
 router = APIRouter(prefix="/dq", tags=["data-quality"])
 settings = get_settings()
 
@@ -257,6 +262,8 @@ def get_dq_reason_samples(
             reason_code=reason_code,
             latest_checked_at=None,
             total_matches=0,
+            check_counts=[],
+            missing_field_counts=[],
             samples=[],
         )
 
@@ -305,10 +312,15 @@ def get_dq_reason_samples(
             )
         )
 
+    check_counts: list[DQReasonCheckCountPayload] = summarize_matching_check_counts(samples)
+    missing_field_counts: list[DQReasonMissingFieldCountPayload] = summarize_missing_field_counts(samples)
+
     return DQReasonSamplesResponse(
         reason_code=reason_code,
         latest_checked_at=latest_checked_at.isoformat(),
         total_matches=len(samples),
+        check_counts=check_counts,
+        missing_field_counts=missing_field_counts,
         samples=samples[:limit],
     )
 @router.get("/markets/{market_id}", response_model=DQDetailResponse)

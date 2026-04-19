@@ -11,6 +11,7 @@ import type {
   ReviewQueueStatus,
   ReviewTaskSummary,
 } from "@/lib/review"
+import { formatReviewReasonDisplay } from "@/lib/review"
 
 import {
   ConsoleBadge,
@@ -448,7 +449,7 @@ export default function ReviewPage() {
                               {task.market?.market_id ?? task.market_ref_id}
                             </p>
                           </td>
-                          <td className="text-sm text-[#c9d1d9]">{task.review_reason_code ?? "-"}</td>
+                          <td className="text-sm text-[#c9d1d9]">{formatReviewReasonDisplay(task.review_reason_code)}</td>
                           <td>
                             <ConsoleBadge label={task.priority} tone={priorityTone(task.priority)} />
                           </td>
