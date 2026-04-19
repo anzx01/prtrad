@@ -1,4 +1,5 @@
 """Integration tests for review queue compatibility."""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
@@ -10,7 +11,18 @@ from tests.integration.conftest import TestSessionLocal
 UTC = timezone.utc
 
 
-def _seed_review_task(*, queue_status: str = "open") -> uuid.UUID:
+def _seed_review_task(
+    *,
+    queue_status: str = "open",
+    primary_category_code: str | None = "Politics",
+    classification_status: str = "classified",
+    admission_bucket_code: str = "review",
+    requires_review: bool = True,
+    conflict_count: int = 1,
+    review_reason_code: str = "LOW_CONFIDENCE",
+    priority: str = "high",
+    failure_reason_code: str = "LOW_CONFIDENCE",
+) -> uuid.UUID:
     session = TestSessionLocal()
     try:
         now = datetime.now(UTC)
@@ -37,13 +49,13 @@ def _seed_review_task(*, queue_status: str = "open") -> uuid.UUID:
                 market_ref_id=market_id,
                 rule_version="rules_v1",
                 source_fingerprint=f"fp-{review_task_id.hex}",
-                classification_status="classified",
-                primary_category_code="Politics",
-                admission_bucket_code="review",
+                classification_status=classification_status,
+                primary_category_code=primary_category_code,
+                admission_bucket_code=admission_bucket_code,
                 confidence=Decimal("0.62"),
-                requires_review=True,
-                conflict_count=1,
-                failure_reason_code="LOW_CONFIDENCE",
+                requires_review=requires_review,
+                conflict_count=conflict_count,
+                failure_reason_code=failure_reason_code,
                 result_details={"source": "integration-test"},
                 classified_at=now,
             )
@@ -54,8 +66,8 @@ def _seed_review_task(*, queue_status: str = "open") -> uuid.UUID:
                 market_ref_id=market_id,
                 classification_result_id=classification_id,
                 queue_status=queue_status,
-                review_reason_code="LOW_CONFIDENCE",
-                priority="high",
+                review_reason_code=review_reason_code,
+                priority=priority,
                 review_payload={"source": "integration-test"},
             )
         )
@@ -75,6 +87,11 @@ def test_review_queue_pending_includes_legacy_open_tasks(client):
     assert data["total"] == 1
     assert data["tasks"][0]["id"] == str(task_id)
     assert data["tasks"][0]["queue_status"] == "pending"
+    assert data["tasks"][0]["can_approve"] is True
+    assert data["tasks"][0]["approval_block_reason"] is None
+    assert data["tasks"][0]["system_next_action"] == "approve"
+    assert data["tasks"][0]["system_conclusion_code"] == "APPROVE_READY"
+    assert data["tasks"][0]["classification_result"]["primary_category_code"] == "Politics"
 
     detail_response = client.get(f"/review/{task_id}")
     assert detail_response.status_code == 200
@@ -177,4 +194,180 @@ def test_bulk_review_reject_requires_reason(client):
         },
     )
     assert response.status_code == 400
-    assert "rejection_reason" in response.json()["detail"]
+    assert "退回原因" in response.json()["detail"]
+
+
+def test_review_task_without_formal_primary_category_can_reject_without_manual_reason(client):
+    task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code=None,
+        classification_status="ReviewRequired",
+        requires_review=True,
+        conflict_count=0,
+        review_reason_code="TAG_NO_CATEGORY_MATCH",
+        priority="normal",
+        failure_reason_code="TAG_NO_CATEGORY_MATCH",
+    )
+
+    response = client.post(
+        f"/review/{task_id}/reject",
+        json={
+            "actor_id": "reviewer_blocked",
+        },
+    )
+    assert response.status_code == 200
+
+    task = response.json()["task"]
+    assert task["queue_status"] == "rejected"
+    assert task["auto_reject_reason_code"] == "TAG_NO_CATEGORY_MATCH"
+
+    detail_response = client.get(f"/review/{task_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["task"]["review_payload"]["rejection_reason"] == "TAG_NO_CATEGORY_MATCH"
+    assert detail_response.json()["task"]["review_payload"]["rejection_reason_auto_filled"] is True
+
+
+def test_bulk_reject_can_use_system_reason_for_unapprovable_tasks(client):
+    first_task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code=None,
+        classification_status="ReviewRequired",
+        requires_review=True,
+        conflict_count=0,
+        review_reason_code="TAG_NO_CATEGORY_MATCH",
+        priority="normal",
+        failure_reason_code="TAG_NO_CATEGORY_MATCH",
+    )
+    second_task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code="CAT_SPORTS",
+        classification_status="Blocked",
+        admission_bucket_code="LIST_BLACK",
+        requires_review=False,
+        conflict_count=0,
+        review_reason_code="TAG_BLACKLIST_MATCH",
+        priority="high",
+        failure_reason_code="TAG_BLACKLIST_MATCH",
+    )
+
+    response = client.post(
+        "/review/bulk-action",
+        json={
+            "task_ids": [str(first_task_id), str(second_task_id)],
+            "action": "reject",
+            "actor_id": "reviewer_bulk",
+        },
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["updated_count"] == 2
+    assert [task["queue_status"] for task in data["tasks"]] == ["rejected", "rejected"]
+
+    first_detail = client.get(f"/review/{first_task_id}")
+    second_detail = client.get(f"/review/{second_task_id}")
+    assert first_detail.status_code == 200
+    assert second_detail.status_code == 200
+    assert first_detail.json()["task"]["review_payload"]["rejection_reason"] == "TAG_NO_CATEGORY_MATCH"
+    assert second_detail.json()["task"]["review_payload"]["rejection_reason"] == "TAG_BLACKLIST_MATCH"
+
+
+def test_review_task_without_formal_primary_category_cannot_be_approved(client):
+    task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code=None,
+        classification_status="ReviewRequired",
+        requires_review=True,
+        conflict_count=0,
+        review_reason_code="TAG_NO_CATEGORY_MATCH",
+        priority="normal",
+        failure_reason_code="TAG_NO_CATEGORY_MATCH",
+    )
+
+    response = client.post(
+        f"/review/{task_id}/approve",
+        json={
+            "actor_id": "reviewer_blocked",
+            "approval_notes": "should be rejected",
+        },
+    )
+    assert response.status_code == 400
+    assert "缺少正式主类别" in response.json()["detail"]
+
+    detail_response = client.get(f"/review/{task_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["task"]["queue_status"] == "pending"
+
+
+def test_bulk_approve_returns_clear_error_when_selection_contains_unapprovable_task(client):
+    approvable_task_id = _seed_review_task(queue_status="pending")
+    blocked_task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code=None,
+        classification_status="ReviewRequired",
+        requires_review=True,
+        conflict_count=0,
+        review_reason_code="TAG_NO_CATEGORY_MATCH",
+        priority="normal",
+        failure_reason_code="TAG_NO_CATEGORY_MATCH",
+    )
+
+    queue_response = client.get("/review/queue?queue_status=pending&page=1&page_size=20")
+    assert queue_response.status_code == 200
+    queue_tasks = {task["id"]: task for task in queue_response.json()["tasks"]}
+    assert queue_tasks[str(approvable_task_id)]["can_approve"] is True
+    assert queue_tasks[str(blocked_task_id)]["can_approve"] is False
+    assert "正式主类别" in queue_tasks[str(blocked_task_id)]["approval_block_reason"]
+    assert queue_tasks[str(blocked_task_id)]["system_next_action"] == "reject"
+    assert queue_tasks[str(blocked_task_id)]["auto_reject_reason_code"] == "TAG_NO_CATEGORY_MATCH"
+
+    response = client.post(
+        "/review/bulk-action",
+        json={
+            "task_ids": [str(approvable_task_id), str(blocked_task_id)],
+            "action": "approve",
+            "actor_id": "reviewer_bulk",
+            "notes": "should fail",
+        },
+    )
+    assert response.status_code == 400
+    assert "当前不允许批准" in response.json()["detail"]
+
+    approvable_detail = client.get(f"/review/{approvable_task_id}")
+    blocked_detail = client.get(f"/review/{blocked_task_id}")
+    assert approvable_detail.status_code == 200
+    assert blocked_detail.status_code == 200
+    assert approvable_detail.json()["task"]["queue_status"] == "pending"
+    assert blocked_detail.json()["task"]["queue_status"] == "pending"
+
+
+def test_blocked_review_task_cannot_be_approved(client):
+    task_id = _seed_review_task(
+        queue_status="pending",
+        primary_category_code="CAT_SPORTS",
+        classification_status="Blocked",
+        admission_bucket_code="LIST_BLACK",
+        requires_review=False,
+        conflict_count=0,
+        review_reason_code="TAG_BLACKLIST_MATCH",
+        priority="high",
+        failure_reason_code="TAG_BLACKLIST_MATCH",
+    )
+
+    queue_response = client.get("/review/queue?queue_status=pending&page=1&page_size=20")
+    assert queue_response.status_code == 200
+    queue_tasks = {task["id"]: task for task in queue_response.json()["tasks"]}
+    assert queue_tasks[str(task_id)]["can_approve"] is False
+    assert "命中阻断规则" in queue_tasks[str(task_id)]["approval_block_reason"]
+    assert queue_tasks[str(task_id)]["system_conclusion_code"] == "AUTO_BLOCKED"
+    assert queue_tasks[str(task_id)]["auto_reject_reason_code"] == "TAG_BLACKLIST_MATCH"
+
+    response = client.post(
+        f"/review/{task_id}/approve",
+        json={
+            "actor_id": "reviewer_blocked",
+            "approval_notes": "should not pass",
+        },
+    )
+    assert response.status_code == 400
+    assert "命中阻断规则" in response.json()["detail"]

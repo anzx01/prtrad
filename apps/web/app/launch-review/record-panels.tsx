@@ -20,6 +20,7 @@ import {
   recommendationTone,
   reviewTone,
 } from "./constants"
+import { buildLaunchReviewGuidance } from "./guidance"
 import { LaunchEvidenceSection } from "./evidence-section"
 import type { DecisionDraft, DecisionFeedback, LaunchReview, ShadowRun } from "./types"
 
@@ -120,6 +121,7 @@ export function LaunchReviewsPanel({
         {reviews.map((review) => {
           const hasFailedChecklist = review.checklist.some((item) => !item.passed)
           const failedChecklistItems = review.checklist.filter((item) => !item.passed)
+          const guidance = buildLaunchReviewGuidance(review)
 
           return (
             <ConsoleInset key={review.id}>
@@ -143,6 +145,23 @@ export function LaunchReviewsPanel({
                     </>
                   ) : null}
                 </div>
+              </div>
+
+              <div
+                className={`mt-4 rounded-xl border p-4 text-sm ${
+                  guidance.tone === "bad"
+                    ? "border-[#f85149]/35 bg-[#da3633]/12 text-[#ffd8d3]"
+                    : guidance.tone === "warn"
+                      ? "border-[#d29922]/35 bg-[#9e6a03]/15 text-[#f2cc60]"
+                      : guidance.tone === "good"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                        : "border-[#58a6ff]/30 bg-[#1f6feb]/10 text-[#c9d1d9]"
+                }`}
+              >
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[#8b949e]">系统结论</p>
+                <p className="mt-2 font-medium text-[#e6edf3]">{guidance.conclusion}</p>
+                <p className="mt-2 leading-6">{guidance.reason}</p>
+                <p className="mt-2 text-xs text-sky-200">建议动作：{guidance.nextActionLabel}</p>
               </div>
 
               {decisionFeedback?.reviewId === review.id ? (

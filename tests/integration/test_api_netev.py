@@ -89,6 +89,88 @@ def _seed_candidate_market() -> uuid.UUID:
         session.close()
 
 
+def _seed_warn_candidate_market() -> uuid.UUID:
+    session = TestSessionLocal()
+    try:
+        now = datetime.now(UTC)
+        market_id = uuid.uuid4()
+        session.add(
+            Market(
+                id=market_id,
+                market_id="api-candidate-warn-1",
+                question="Will the API warn candidate resolve YES?",
+                category_raw="Politics",
+                market_status="active_accepting_orders",
+                creation_time=now - timedelta(days=1),
+                open_time=now - timedelta(days=1),
+                close_time=now + timedelta(days=1),
+                source_updated_at=now,
+            )
+        )
+        session.add(
+            CalibrationUnit(
+                id=uuid.uuid4(),
+                category_code="Politics",
+                price_bucket="p70_90",
+                time_bucket="d1_3",
+                liquidity_tier="standard",
+                window_type="long",
+                sample_count=12,
+                edge_estimate=Decimal("0.060000"),
+                interval_low=Decimal("0.030000"),
+                interval_high=Decimal("0.090000"),
+                is_active=True,
+                computed_at=now,
+            )
+        )
+        session.add(
+            MarketSnapshot(
+                id=uuid.uuid4(),
+                market_ref_id=market_id,
+                snapshot_time=now,
+                best_bid_yes=Decimal("0.75"),
+                best_ask_yes=Decimal("0.77"),
+                spread=Decimal("0.02"),
+                cumulative_depth_at_target_size=Decimal("2500"),
+                traded_volume=Decimal("8000"),
+                last_trade_age_seconds=30,
+            )
+        )
+        session.add(
+            DataQualityResult(
+                id=uuid.uuid4(),
+                market_ref_id=market_id,
+                checked_at=now,
+                status="warn",
+                score=Decimal("0.95"),
+                failure_count=0,
+                result_details={
+                    "blocking_reason_codes": [],
+                    "warning_reason_codes": ["REJ_DATA_ANOMALY"],
+                },
+                rule_version="dq_v1",
+            )
+        )
+        session.add(
+            MarketScoringResult(
+                id=uuid.uuid4(),
+                market_ref_id=market_id,
+                classification_result_id=None,
+                clarity_score=Decimal("0.88"),
+                resolution_objectivity_score=Decimal("0.91"),
+                overall_score=Decimal("0.89"),
+                admission_recommendation="Approved",
+                rejection_reason_code=None,
+                scoring_details={"source": "integration-test"},
+                scored_at=now,
+            )
+        )
+        session.commit()
+        return market_id
+    finally:
+        session.close()
+
+
 def test_evaluate_market_endpoint(client):
     market_id = _seed_candidate_market()
 
@@ -101,6 +183,26 @@ def test_evaluate_market_endpoint(client):
     assert data["rule_version"] == "dev"
     assert data["rejection_reason_code"] is None
     assert data["calibration_sample_count"] == 12
+    assert data["dq_primary_reason_code"] is None
+    assert data["dq_blocking_reason_codes"] == []
+    assert data["dq_warning_reason_codes"] == []
+
+
+def test_evaluate_market_endpoint_exposes_dq_context_when_warn_blocks_netev(client):
+    market_id = _seed_warn_candidate_market()
+
+    response = client.post(f"/netev/evaluate/{market_id}?window_type=long")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["admission_decision"] == "reject"
+    assert data["rejection_reason_code"] == "DQ_NOT_PASS"
+    assert data["dq_status"] == "warn"
+    assert data["dq_primary_reason_code"] == "REJ_DATA_ANOMALY"
+    assert data["dq_primary_reason_name"] == "发现数据异常"
+    assert data["dq_warning_reason_codes"] == ["REJ_DATA_ANOMALY"]
+    assert data["dq_blocking_reason_codes"] == []
+    assert data["dq_checked_at"] is not None
 
 
 def test_evaluate_batch_endpoint(client):

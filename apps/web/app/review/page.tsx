@@ -4,6 +4,11 @@ import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 
 import { apiGet, apiPost } from "@/lib/api"
+import {
+  canAutoRejectTask,
+  formatReviewPriorityDisplay,
+  formatReviewReasonDisplay,
+} from "@/lib/review"
 import type {
   ReviewBulkAction,
   ReviewBulkActionResponse,
@@ -11,7 +16,6 @@ import type {
   ReviewQueueStatus,
   ReviewTaskSummary,
 } from "@/lib/review"
-import { formatReviewReasonDisplay } from "@/lib/review"
 
 import {
   ConsoleBadge,
@@ -33,7 +37,7 @@ const STATUS_LABELS: Record<ReviewQueueStatus, string> = {
   pending: "待处理",
   in_progress: "处理中",
   approved: "已通过",
-  rejected: "已拒绝",
+  rejected: "已退回",
   cancelled: "已取消",
 }
 
@@ -75,6 +79,7 @@ function bulkActionLabel(action: ReviewBulkAction, count: number) {
 
 export default function ReviewPage() {
   const [tasks, setTasks] = useState<ReviewTaskSummary[]>([])
+  const [taskCatalog, setTaskCatalog] = useState<Record<string, ReviewTaskSummary>>({})
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -99,6 +104,13 @@ export default function ReviewPage() {
           return
         }
         setTasks(data.tasks || [])
+        setTaskCatalog((current) => {
+          const next = { ...current }
+          for (const task of data.tasks || []) {
+            next[task.id] = task
+          }
+          return next
+        })
         setTotal(data.total || 0)
         setLoading(false)
       })
@@ -123,18 +135,33 @@ export default function ReviewPage() {
   const allowsQueueActions = isActionableStatus(statusFilter)
   const selectedCount = selectedIds.length
   const selectedVisibleCount = tasks.filter((task) => selectedIds.includes(task.id)).length
+  const selectedTasks = useMemo(
+    () => selectedIds.map((taskId) => taskCatalog[taskId]).filter((task): task is ReviewTaskSummary => Boolean(task)),
+    [selectedIds, taskCatalog],
+  )
+  const selectedBlockedApprovalTasks = useMemo(
+    () => selectedTasks.filter((task) => !task.can_approve),
+    [selectedTasks],
+  )
+  const selectedAutoRejectableTasks = useMemo(
+    () => selectedTasks.filter((task) => canAutoRejectTask(task)),
+    [selectedTasks],
+  )
 
   const summary = useMemo(() => {
-    const urgentCount = tasks.filter((task) => task.priority === "urgent").length
-    const highCount = tasks.filter((task) => task.priority === "high").length
-    const actionableCount = tasks.filter((task) => isActionableStatus(task.queue_status)).length
-    return { urgentCount, highCount, actionableCount }
+    const approveReadyCount = tasks.filter((task) => task.system_next_action === "approve").length
+    const rejectSuggestedCount = tasks.filter((task) => task.system_next_action === "reject").length
+    return { approveReadyCount, rejectSuggestedCount }
   }, [tasks])
 
   const allVisibleSelected = tasks.length > 0 && selectedVisibleCount === tasks.length
   const allFilteredSelected = total > 0 && selectedCount === total
   const canBulkStart = allowsQueueActions && statusFilter === "pending" && selectedCount > 0
   const canBulkDecide = allowsQueueActions && selectedCount > 0
+  const canBulkApprove = canBulkDecide && selectedBlockedApprovalTasks.length === 0
+  const canBulkRejectWithoutReason =
+    canBulkDecide && selectedTasks.length > 0 && selectedAutoRejectableTasks.length === selectedTasks.length
+  const canBulkReject = canBulkDecide && (Boolean(rejectReason.trim()) || canBulkRejectWithoutReason)
 
   async function selectAllFilteredTasks() {
     if (!allowsQueueActions || total === 0) {
@@ -151,6 +178,13 @@ export default function ReviewPage() {
         apiGet<ReviewQueueResponse>(buildQueueUrl(statusFilter, index + 1, BULK_SELECT_PAGE_SIZE)),
       )
       const pages = await Promise.all(requests)
+      setTaskCatalog((current) => {
+        const next = { ...current }
+        for (const task of pages.flatMap((response) => response.tasks)) {
+          next[task.id] = task
+        }
+        return next
+      })
       const ids = pages.flatMap((response) => response.tasks.map((task) => task.id))
       setSelectedIds(Array.from(new Set(ids)))
       setActionMessage(`已全选当前筛选下的 ${ids.length} 条任务。`)
@@ -170,9 +204,31 @@ export default function ReviewPage() {
       setError("请先填写审核人。")
       return
     }
+
+    if (action === "approve") {
+      const blockedTasks = taskIds
+        .map((taskId) => taskCatalog[taskId])
+        .filter((task): task is ReviewTaskSummary => Boolean(task) && !task.can_approve)
+      if (blockedTasks.length > 0) {
+        const preview = blockedTasks
+          .slice(0, 3)
+          .map((task) => task.market?.market_id ?? task.id)
+          .join("、")
+        const suffix = blockedTasks.length > 3 ? " 等" : ""
+        setError(`当前选中的 ${blockedTasks.length} 条任务当前不允许批准：${preview}${suffix}`)
+        return
+      }
+    }
+
     if (action === "reject" && !rejectReason.trim()) {
-      setError("批量拒绝前请先填写拒绝原因。")
-      return
+      const canUseSystemReason = taskIds.every((taskId) => {
+        const task = taskCatalog[taskId]
+        return Boolean(task) && canAutoRejectTask(task)
+      })
+      if (!canUseSystemReason) {
+        setError("批量退回前请先填写退回原因；如果系统已明确这条不能批准，则可以直接一键退回。")
+        return
+      }
     }
 
     setActionLoading(`${action}:${taskIds.length}`)
@@ -222,23 +278,23 @@ export default function ReviewPage() {
       <PageIntro
         eyebrow="Review Queue"
         title="人工审核队列"
-        description="这页支持单条审核，也支持先全选再一键处理。全选默认先作用于当前页，你也可以直接全选当前筛选下的全部任务。"
+        description="系统会先给出“可直接批准”还是“更适合退回”的结论；你只需要处理它仍不确定的少数任务。"
         stats={[
           { label: "当前筛选总数", value: String(total) },
           { label: "当前已选", value: String(selectedCount) },
         ]}
         guides={[
           {
-            title: "单条审核",
-            description: "可以在列表里直接开始、通过、拒绝，也可以进入详情页看完整证据后再决定。",
+            title: "先看系统结论",
+            description: "优先看“系统结论”和“建议动作”，不要先去猜内部原因码。",
           },
           {
-            title: "全选审核",
-            description: "先点“全选当前页”或“全选当前筛选”，再点一键通过或一键拒绝。",
+            title: "批量处理",
+            description: "先点“全选当前页”或“全选当前筛选”，再批量批准或批量退回。",
           },
           {
-            title: "拒绝注意",
-            description: "一键拒绝前必须先填写拒绝原因，避免后续无法追溯为什么退回。",
+            title: "少填原因",
+            description: "如果系统已明确这条不能批准，直接退回即可，系统会自动补全退回原因。",
           },
         ]}
       />
@@ -256,16 +312,16 @@ export default function ReviewPage() {
           tone={selectedCount > 0 ? "info" : "neutral"}
         />
         <ConsoleMetric
-          label="本页高优任务"
-          value={String(summary.urgentCount + summary.highCount)}
-          hint="优先处理 urgent / high。"
-          tone={summary.urgentCount + summary.highCount > 0 ? "warn" : "good"}
+          label="本页可直接批准"
+          value={String(summary.approveReadyCount)}
+          hint="这类任务通常只需核对后放行。"
+          tone={summary.approveReadyCount > 0 ? "good" : "neutral"}
         />
         <ConsoleMetric
-          label="本页可操作"
-          value={String(summary.actionableCount)}
-          hint={allowsQueueActions ? "当前筛选支持直接审核。" : "当前筛选主要用于查看结果。"}
-          tone={summary.actionableCount > 0 ? "info" : "neutral"}
+          label="本页建议退回"
+          value={String(summary.rejectSuggestedCount)}
+          hint="这类任务更适合直接退回，不建议硬批。"
+          tone={summary.rejectSuggestedCount > 0 ? "warn" : "neutral"}
         />
       </section>
 
@@ -294,7 +350,7 @@ export default function ReviewPage() {
         title="批量审核"
         description={
           allowsQueueActions
-            ? "这里就是全选后的一键审核区。批量通过或拒绝时，系统会自动先接手 pending 任务，再完成审核。"
+            ? "这里就是全选后的一键审核区。批量处理时，系统会自动先接手 pending 任务；对已明确不能批准的任务，也会自动补全退回原因。"
             : "当前筛选是已处理结果，不能再批量审核，只能查看历史结果。"
         }
       >
@@ -306,11 +362,11 @@ export default function ReviewPage() {
               placeholder="例如 reviewer_1"
             />
           </ConsoleField>
-          <ConsoleField label="拒绝原因">
+          <ConsoleField label="退回原因">
             <ConsoleInput
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
-              placeholder="例如 INVALID_CATEGORY"
+              placeholder="可选；若系统已明确不能批准，可留空自动补全"
               disabled={!allowsQueueActions}
             />
           </ConsoleField>
@@ -363,7 +419,7 @@ export default function ReviewPage() {
             size="sm"
             tone="success"
             onClick={() => void runReviewAction(selectedIds, "approve")}
-            disabled={!canBulkDecide || actionLoading !== null}
+            disabled={!canBulkApprove || actionLoading !== null}
           >
             一键通过已选
           </ConsoleButton>
@@ -372,11 +428,21 @@ export default function ReviewPage() {
             size="sm"
             tone="danger"
             onClick={() => void runReviewAction(selectedIds, "reject")}
-            disabled={!canBulkDecide || !rejectReason.trim() || actionLoading !== null}
+            disabled={!canBulkReject || actionLoading !== null}
           >
-            一键拒绝已选
+            一键退回已选
           </ConsoleButton>
         </div>
+        {canBulkRejectWithoutReason && !rejectReason.trim() ? (
+          <p className="mt-3 text-sm text-sky-200">
+            当前已选任务都已被系统判定为“不能批准”，可以直接一键退回，系统会自动补全退回原因。
+          </p>
+        ) : null}
+        {selectedBlockedApprovalTasks.length > 0 ? (
+          <p className="mt-3 text-sm text-amber-200">
+            当前已选任务里有 {selectedBlockedApprovalTasks.length} 条当前不允许批准；这类任务更适合直接退回，或交给系统自动拦截。
+          </p>
+        ) : null}
       </ConsolePanel>
 
       <section className="mt-6">
@@ -416,7 +482,7 @@ export default function ReviewPage() {
                         </th>
                       ) : null}
                       <th>市场</th>
-                      <th>触发原因</th>
+                      <th>系统结论</th>
                       <th>优先级</th>
                       <th>状态</th>
                       <th>创建时间</th>
@@ -449,9 +515,19 @@ export default function ReviewPage() {
                               {task.market?.market_id ?? task.market_ref_id}
                             </p>
                           </td>
-                          <td className="text-sm text-[#c9d1d9]">{formatReviewReasonDisplay(task.review_reason_code)}</td>
                           <td>
-                            <ConsoleBadge label={task.priority} tone={priorityTone(task.priority)} />
+                            <p className="text-sm font-medium text-[#e6edf3]">{task.system_conclusion}</p>
+                            <p className="mt-1 text-xs text-sky-200">建议动作：{task.system_next_action_label}</p>
+                            <p className="mt-1 text-xs leading-5 text-[#c9d1d9]">{task.system_reason}</p>
+                            <p className="mt-1 text-xs text-[#8b949e]">
+                              触发原因：{formatReviewReasonDisplay(task.review_reason_code)}
+                            </p>
+                          </td>
+                          <td>
+                            <ConsoleBadge
+                              label={formatReviewPriorityDisplay(task.priority)}
+                              tone={priorityTone(task.priority)}
+                            />
                           </td>
                           <td>
                             <ConsoleBadge label={STATUS_LABELS[task.queue_status]} tone={statusTone(task.queue_status)} />
@@ -476,7 +552,7 @@ export default function ReviewPage() {
                                     size="sm"
                                     tone="success"
                                     onClick={() => void runReviewAction([task.id], "approve")}
-                                    disabled={rowLoading}
+                                    disabled={rowLoading || !task.can_approve}
                                   >
                                     通过
                                   </ConsoleButton>
@@ -485,9 +561,9 @@ export default function ReviewPage() {
                                     size="sm"
                                     tone="danger"
                                     onClick={() => void runReviewAction([task.id], "reject")}
-                                    disabled={rowLoading || !rejectReason.trim()}
+                                    disabled={rowLoading || (!rejectReason.trim() && !canAutoRejectTask(task))}
                                   >
-                                    拒绝
+                                    退回
                                   </ConsoleButton>
                                 </>
                               ) : null}
@@ -498,6 +574,17 @@ export default function ReviewPage() {
                                 查看详情
                               </Link>
                             </div>
+                            {!task.can_approve ? (
+                              <p className="mt-2 text-xs text-amber-200">
+                                {task.system_reason}
+                              </p>
+                            ) : null}
+                            {canAutoRejectTask(task) && !rejectReason.trim() ? (
+                              <p className="mt-2 text-xs text-sky-200">
+                                可直接退回，系统会自动补全原因：
+                                {formatReviewReasonDisplay(task.auto_reject_reason_code)}
+                              </p>
+                            ) : null}
                           </td>
                         </tr>
                       )

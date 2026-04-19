@@ -1,0 +1,944 @@
+﻿{
+  "dictionary": {
+    "created": 0,
+    "updated": 24,
+    "total": 24,
+    "tag_codes": [
+      "CAT_NUMERIC",
+      "CAT_TIME",
+      "CAT_STATISTICAL",
+      "CAT_PERSON",
+      "CAT_MACRO",
+      "CAT_GEOPOLITICAL",
+      "CAT_DISASTER",
+      "CAT_SPORTS",
+      "CAT_CRYPTO_ASSET",
+      "CAT_OTHER",
+      "RF_OBJECTIVE_RESOLUTION",
+      "RF_SOURCE_AUTHORITY_CLEAR",
+      "RF_SOURCE_COUNT_MULTIPLE",
+      "RF_MANUAL_INTERPRETATION_REQUIRED",
+      "RF_SINGLE_EVENT_DEPENDENT",
+      "RF_SINGLE_ASSET_CORRELATED",
+      "RF_MACRO_CORRELATED",
+      "RF_DISPUTE_TEMPLATE_SIMILAR",
+      "RF_PRE_CLOSE_INFORMATION_JUMP",
+      "RF_LIQUIDITY_THIN",
+      "RF_THEME_CLUSTERED",
+      "LIST_WHITE",
+      "LIST_GREY",
+      "LIST_BLACK"
+    ]
+  },
+  "rule_version": {
+    "version_code": "tag_default_v2",
+    "status": "active",
+    "release_kind": "standard",
+    "base_version_code": null,
+    "supersedes_version_code": "tag_default_v1",
+    "change_reason": "Seed baseline tagging rules for repeatable local setup.",
+    "evidence_summary": "Derived from docs/tagging guidance and current development-market shapes.",
+    "impact_summary": "Auto-tags crypto asset price markets and auto-blocks common sports/esports market shapes to reduce manual review load.",
+    "rollback_plan": "Activate a prior tag_rule_version or publish a rollback version if these defaults regress.",
+    "version_notes": "Default baseline rules for development bootstrap and early M3 validation.",
+    "checksum": "49565258b2010bc2750d65bbd3d1a0e9953b8d72a80c90e1974c5f55c858991a",
+    "created_by": "system",
+    "activated_by": "system",
+    "created_at": "2026-04-19T06:55:09",
+    "updated_at": "2026-04-19T06:55:09",
+    "activated_at": "2026-04-19T06:55:09.159651",
+    "retired_at": null,
+    "dictionary_size": 24,
+    "dictionary_snapshot": [
+      {
+        "tag_code": "CAT_NUMERIC",
+        "tag_name": "Numeric",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "����ֵ��ֵ��������������Ϊ���Ľ����׼���г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 10,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_TIME",
+        "tag_name": "Time",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "�Ծ���ʱ��㡢���ڴ��ڻ�ʱ���¼�Ϊ�����г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 20,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_STATISTICAL",
+        "tag_name": "Statistical",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "��ͳ�ƽ���������ۺϻ�����ͽ���Ϊ�����г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 30,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_PERSON",
+        "tag_name": "Person",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "Χ�ƾ��������Ϊ��״̬������������չ�����г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 40,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_MACRO",
+        "tag_name": "Macro",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "���۾��á����ߡ����С�ͨ�ͻ�����������ص��г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 50,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_GEOPOLITICAL",
+        "tag_name": "GeoPolitical",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "����ʹ�ϵ��ս�����⽻���Ե�����¼���ص��г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 60,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_DISASTER",
+        "tag_name": "Disaster",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "����Ȼ�ֺ����¹ʻ�ͻ�������¼���ص��г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 70,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_SPORTS",
+        "tag_name": "Sports",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "���������½�������ֻ������¼���ص��г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 80,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_CRYPTO_ASSET",
+        "tag_name": "CryptoAsset",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "������ʲ��۸������¼���Э��״̬��ص��г���",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 90,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "CAT_OTHER",
+        "tag_name": "Other",
+        "tag_type": "category",
+        "dimension": "primary_category",
+        "description": "��δ��������������г����ױ�ǩ��",
+        "aliases": [],
+        "tag_metadata": {
+          "exclusive_group": "primary_category"
+        },
+        "sort_order": 100,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "LIST_WHITE",
+        "tag_name": "������",
+        "tag_type": "list_bucket",
+        "dimension": "admission_bucket",
+        "description": "�����о���Ǳ�ڽ���׼���������г�Ͱ��",
+        "aliases": [],
+        "tag_metadata": {
+          "rank": 1
+        },
+        "sort_order": 400,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "LIST_GREY",
+        "tag_name": "������",
+        "tag_type": "list_bucket",
+        "dimension": "admission_bucket",
+        "description": "�ɽ���۲���˹���ˣ���Ĭ�ϲ�����ʵ�����̵��г�Ͱ��",
+        "aliases": [],
+        "tag_metadata": {
+          "rank": 2
+        },
+        "sort_order": 410,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "LIST_BLACK",
+        "tag_name": "������",
+        "tag_type": "list_bucket",
+        "dimension": "admission_bucket",
+        "description": "Ӧ��ֱ���ų����ڶ����о��ʸ���г�Ͱ��",
+        "aliases": [],
+        "tag_metadata": {
+          "rank": 3
+        },
+        "sort_order": 420,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_DISPUTE_TEMPLATE_SIMILAR",
+        "tag_name": "������ʷ����ģ��������",
+        "tag_type": "risk_factor",
+        "dimension": "dispute_template",
+        "description": "�г��ڽṹ�Ͻӽ���ʷ������ģ�壬��Ҫ�����������",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "negative"
+        },
+        "sort_order": 270,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_MANUAL_INTERPRETATION_REQUIRED",
+        "tag_name": "�����˹�����",
+        "tag_type": "risk_factor",
+        "dimension": "interpretation_dependency",
+        "description": "�г��ж���Ҫ�˹����۽��͡������Ĳ����������ƶϡ�",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "negative"
+        },
+        "sort_order": 230,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_LIQUIDITY_THIN",
+        "tag_name": "������ƫ��",
+        "tag_type": "risk_factor",
+        "dimension": "liquidity_tier",
+        "description": "�̿���Ȳ����ɽ�ϡ�������ܵ����о��ɵõ�ִ�в��ɵá�",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "negative"
+        },
+        "sort_order": 290,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_MACRO_CORRELATED",
+        "tag_name": "���۷���ǿ���",
+        "tag_type": "risk_factor",
+        "dimension": "macro_dependency",
+        "description": "�г��ܺ�����ߡ������Ի�����ϵͳ�Է���������",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "contextual"
+        },
+        "sort_order": 260,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_PRE_CLOSE_INFORMATION_JUMP",
+        "tag_name": "����ǰ��Ϣ�������",
+        "tag_type": "risk_factor",
+        "dimension": "pre_close_information_jump",
+        "description": "�г����ٽ�����ʱ���ܳ���������Ϣ���»�۸����䡣",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "negative"
+        },
+        "sort_order": 280,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_OBJECTIVE_RESOLUTION",
+        "tag_name": "�͹۽���",
+        "tag_type": "risk_factor",
+        "dimension": "resolution_objectivity",
+        "description": "�����׼�Ƿ�������������ȷ�͹���ʵ��֤��",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "positive"
+        },
+        "sort_order": 200,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_SINGLE_ASSET_CORRELATED",
+        "tag_name": "�뵥һ�ʲ�ǿ���",
+        "tag_type": "risk_factor",
+        "dimension": "single_asset_dependency",
+        "description": "�г�����뵥һ�ʲ��۸��״̬�߶���ϡ�",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "contextual"
+        },
+        "sort_order": 250,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_SINGLE_EVENT_DEPENDENT",
+        "tag_name": "������һ�����¼�",
+        "tag_type": "risk_factor",
+        "dimension": "single_event_dependency",
+        "description": "�г����Ƹ߶�������һͻ���¼��򵥵���Ϣ��",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "negative"
+        },
+        "sort_order": 240,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_SOURCE_AUTHORITY_CLEAR",
+        "tag_name": "Ȩ������Դ����",
+        "tag_type": "risk_factor",
+        "dimension": "source_authority",
+        "description": "�г��Ƿ�������ȷ�ҿ��ŵ�Ȩ������Դ��",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "positive"
+        },
+        "sort_order": 210,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_SOURCE_COUNT_MULTIPLE",
+        "tag_name": "������Դ������֤",
+        "tag_type": "risk_factor",
+        "dimension": "source_count",
+        "description": "������ж��Ƿ���ɶ��������Դ������֤��",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "positive"
+        },
+        "sort_order": 220,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      },
+      {
+        "tag_code": "RF_THEME_CLUSTERED",
+        "tag_name": "������༯��",
+        "tag_type": "risk_factor",
+        "dimension": "theme_cluster",
+        "description": "�г��������г��������ϸ߶��ص��������γɷ��մر�¶��",
+        "aliases": [],
+        "tag_metadata": {
+          "polarity": "contextual"
+        },
+        "sort_order": 300,
+        "is_active": true,
+        "created_at": "2026-03-29T01:12:22",
+        "updated_at": "2026-03-29T01:12:22"
+      }
+    ],
+    "config_payload": {
+      "matching": {
+        "text_fields": [
+          "question",
+          "description",
+          "resolution_criteria",
+          "category_raw",
+          "related_tags"
+        ],
+        "case_sensitive": false,
+        "strip_punctuation": true
+      },
+      "classification": {
+        "primary_category_limit": 1,
+        "conflict_policy": "review_required",
+        "allow_multi_factor": true
+      },
+      "review": {
+        "low_confidence_threshold": 0.65,
+        "conflict_requires_review": true,
+        "empty_match_requires_review": true
+      },
+      "admission": {
+        "white_bucket_code": "LIST_WHITE",
+        "grey_bucket_code": "LIST_GREY",
+        "black_bucket_code": "LIST_BLACK"
+      }
+    },
+    "rule_count": 16,
+    "rules": [
+      {
+        "rule_code": "CRYPTO_CAT_BY_CATEGORY",
+        "rule_name": "Classify crypto price markets by category_raw",
+        "rule_kind": "keyword",
+        "action_type": "assign_primary_category",
+        "target_tag_code": "CAT_CRYPTO_ASSET",
+        "priority": 10,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "crypto prices",
+            "bitcoin",
+            "ethereum",
+            "crypto"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.96
+        },
+        "notes": "Baseline whitelist for recurring crypto price questions.",
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_CAT_BY_QUESTION",
+        "rule_name": "Classify crypto up/down markets by question text",
+        "rule_kind": "keyword",
+        "action_type": "assign_primary_category",
+        "target_tag_code": "CAT_CRYPTO_ASSET",
+        "priority": 20,
+        "enabled": true,
+        "match_scope": [
+          "question"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "higher or lower"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.88
+        },
+        "notes": "Question fallback when upstream category labels are noisy.",
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_WHITE_BY_CATEGORY",
+        "rule_name": "Allow crypto price markets into white bucket by category_raw",
+        "rule_kind": "keyword",
+        "action_type": "set_admission_bucket",
+        "target_tag_code": "LIST_WHITE",
+        "priority": 30,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "crypto prices",
+            "bitcoin",
+            "ethereum",
+            "crypto"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.94
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_WHITE_BY_QUESTION",
+        "rule_name": "Allow crypto up/down markets into white bucket by question text",
+        "rule_kind": "keyword",
+        "action_type": "set_admission_bucket",
+        "target_tag_code": "LIST_WHITE",
+        "priority": 40,
+        "enabled": true,
+        "match_scope": [
+          "question"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "higher or lower"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.86
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_OBJECTIVE_RULE",
+        "rule_name": "Mark crypto up/down markets as objective resolution",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_OBJECTIVE_RESOLUTION",
+        "priority": 50,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "category_raw"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "higher or lower"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.9
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_SOURCE_RULE",
+        "rule_name": "Mark crypto price feeds as authority-backed",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_SOURCE_AUTHORITY_CLEAR",
+        "priority": 60,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "crypto prices",
+            "bitcoin",
+            "ethereum",
+            "crypto"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.82
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_SINGLE_ASSET_RULE",
+        "rule_name": "Mark crypto markets as single-asset correlated",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_SINGLE_ASSET_CORRELATED",
+        "priority": 70,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "category_raw",
+          "related_tags"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "bitcoin",
+            "ethereum",
+            "solana",
+            "dogecoin",
+            "xrp",
+            "bnb",
+            "hyperliquid",
+            "hype"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.8
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "CRYPTO_PRE_CLOSE_RULE",
+        "rule_name": "Mark crypto up/down markets as pre-close jump sensitive",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_PRE_CLOSE_INFORMATION_JUMP",
+        "priority": 80,
+        "enabled": true,
+        "match_scope": [
+          "question"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "up or down",
+            "higher or lower"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.72
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_CAT_RULE",
+        "rule_name": "Classify sports and esports markets",
+        "rule_kind": "keyword",
+        "action_type": "assign_primary_category",
+        "target_tag_code": "CAT_SPORTS",
+        "priority": 110,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "sports",
+            "esports"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.97
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_CAT_BY_MARKET_SHAPE",
+        "rule_name": "Classify deterministic sports and esports market shapes",
+        "rule_kind": "regex",
+        "action_type": "assign_primary_category",
+        "target_tag_code": "CAT_SPORTS",
+        "priority": 115,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "description"
+        ],
+        "match_operator": "regex",
+        "match_payload": {
+          "patterns": [
+            "\\b(?:o/u|over/under)\\s+\\d+(?:\\.\\d+)?\\b",
+            "^spread:\\s",
+            "^exact score:\\s",
+            "\\bmap\\s+\\d+\\s+winner\\b",
+            "\\bgame\\s+\\d+\\s+winner\\b",
+            "\\bgames?\\s+total\\b",
+            "\\bmap handicap\\b",
+            "\\bbo[1357]\\b",
+            "\\b(?:valorant|counter-strike|mobile legends(?: bang bang)?|league of legends|dota 2|cs2):",
+            "\\bgame\\s+\\d+:\\s+both teams destroy inhibitors\\??\\b",
+            "\\bgame\\s+\\d+:\\s+odd/even total kills\\??\\b",
+            "\\bgame\\s+\\d+:\\s+both teams slay baron nashor\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player quadra kill\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player penta kill\\??\\b",
+            "\\b(?:first blood|first tower|first dragon|first baron|total kills|total towers|dragon soul)\\b",
+            "(?s)\\bwill .+ win on \\d{4}-\\d{2}-\\d{2}\\b.*(?:upcoming game|match statistics|first 90 minutes|regular play)"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.94
+        },
+        "notes": "Covers common match-up, spread, totals, exact score, and map/game winner markets.",
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_BLACK_RULE",
+        "rule_name": "Block sports and esports markets by default",
+        "rule_kind": "keyword",
+        "action_type": "set_admission_bucket",
+        "target_tag_code": "LIST_BLACK",
+        "priority": 120,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "sports",
+            "esports"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.97
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_BLACK_BY_MARKET_SHAPE",
+        "rule_name": "Block deterministic sports and esports market shapes by default",
+        "rule_kind": "regex",
+        "action_type": "set_admission_bucket",
+        "target_tag_code": "LIST_BLACK",
+        "priority": 125,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "description"
+        ],
+        "match_operator": "regex",
+        "match_payload": {
+          "patterns": [
+            "\\b(?:o/u|over/under)\\s+\\d+(?:\\.\\d+)?\\b",
+            "^spread:\\s",
+            "^exact score:\\s",
+            "\\bmap\\s+\\d+\\s+winner\\b",
+            "\\bgame\\s+\\d+\\s+winner\\b",
+            "\\bgames?\\s+total\\b",
+            "\\bmap handicap\\b",
+            "\\bbo[1357]\\b",
+            "\\b(?:valorant|counter-strike|mobile legends(?: bang bang)?|league of legends|dota 2|cs2):",
+            "\\bgame\\s+\\d+:\\s+both teams destroy inhibitors\\??\\b",
+            "\\bgame\\s+\\d+:\\s+odd/even total kills\\??\\b",
+            "\\bgame\\s+\\d+:\\s+both teams slay baron nashor\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player quadra kill\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player penta kill\\??\\b",
+            "\\b(?:first blood|first tower|first dragon|first baron|total kills|total towers|dragon soul)\\b",
+            "(?s)\\bwill .+ win on \\d{4}-\\d{2}-\\d{2}\\b.*(?:upcoming game|match statistics|first 90 minutes|regular play)"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.95
+        },
+        "notes": "Keeps sports/esports markets out of the novice flow without requiring manual approval clicks.",
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_MANUAL_RULE",
+        "rule_name": "Flag sports and esports markets as manual-interpretation heavy",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_MANUAL_INTERPRETATION_REQUIRED",
+        "priority": 130,
+        "enabled": true,
+        "match_scope": [
+          "category_raw"
+        ],
+        "match_operator": "equals_any",
+        "match_payload": {
+          "keywords": [
+            "sports",
+            "esports"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.84
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "SPORTS_MANUAL_BY_MARKET_SHAPE",
+        "rule_name": "Flag deterministic sports and esports market shapes as manual-interpretation heavy",
+        "rule_kind": "regex",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_MANUAL_INTERPRETATION_REQUIRED",
+        "priority": 135,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "description"
+        ],
+        "match_operator": "regex",
+        "match_payload": {
+          "patterns": [
+            "\\b(?:o/u|over/under)\\s+\\d+(?:\\.\\d+)?\\b",
+            "^spread:\\s",
+            "^exact score:\\s",
+            "\\bmap\\s+\\d+\\s+winner\\b",
+            "\\bgame\\s+\\d+\\s+winner\\b",
+            "\\bgames?\\s+total\\b",
+            "\\bmap handicap\\b",
+            "\\bbo[1357]\\b",
+            "\\b(?:valorant|counter-strike|mobile legends(?: bang bang)?|league of legends|dota 2|cs2):",
+            "\\bgame\\s+\\d+:\\s+both teams destroy inhibitors\\??\\b",
+            "\\bgame\\s+\\d+:\\s+odd/even total kills\\??\\b",
+            "\\bgame\\s+\\d+:\\s+both teams slay baron nashor\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player quadra kill\\??\\b",
+            "\\bgame\\s+\\d+:\\s+any player penta kill\\??\\b",
+            "\\b(?:first blood|first tower|first dragon|first baron|total kills|total towers|dragon soul)\\b",
+            "(?s)\\bwill .+ win on \\d{4}-\\d{2}-\\d{2}\\b.*(?:upcoming game|match statistics|first 90 minutes|regular play)"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.84
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "BLACKLIST_TOPIC_RULE",
+        "rule_name": "Block politics, macro, war, and disaster topics",
+        "rule_kind": "keyword",
+        "action_type": "set_admission_bucket",
+        "target_tag_code": "LIST_BLACK",
+        "priority": 140,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "description",
+          "category_raw"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "election",
+            "president",
+            "senate",
+            "congress",
+            "inflation",
+            "cpi",
+            "fed",
+            "war",
+            "ceasefire",
+            "hurricane",
+            "earthquake",
+            "wildfire"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.93
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      },
+      {
+        "rule_code": "BLACKLIST_DISPUTE_RULE",
+        "rule_name": "Mark blocked topics as dispute-prone",
+        "rule_kind": "keyword",
+        "action_type": "add_risk_factor",
+        "target_tag_code": "RF_DISPUTE_TEMPLATE_SIMILAR",
+        "priority": 150,
+        "enabled": true,
+        "match_scope": [
+          "question",
+          "description",
+          "category_raw"
+        ],
+        "match_operator": "contains_any",
+        "match_payload": {
+          "keywords": [
+            "election",
+            "president",
+            "senate",
+            "congress",
+            "inflation",
+            "cpi",
+            "fed",
+            "war",
+            "ceasefire",
+            "hurricane",
+            "earthquake",
+            "wildfire"
+          ]
+        },
+        "effect_payload": {
+          "confidence": 0.78
+        },
+        "notes": null,
+        "created_at": "2026-04-19T06:55:09",
+        "updated_at": "2026-04-19T06:55:09"
+      }
+    ]
+  },
+  "classification": {
+    "classified_at": "2026-04-19T06:57:40.224572+00:00",
+    "selected_markets": 200,
+    "created": 0,
+    "skipped_existing": 200,
+    "Tagged": 0,
+    "ReviewRequired": 0,
+    "Blocked": 0,
+    "ClassificationFailed": 0,
+    "review_tasks_created": 0,
+    "sample_results": []
+  }
+}

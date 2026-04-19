@@ -50,7 +50,7 @@ def test_seed_default_rule_version_is_idempotent(test_db, monkeypatch):
     first = service.seed_default_rule_version(actor_id="tester")
     second = service.seed_default_rule_version(actor_id="tester")
 
-    assert first["version_code"] == "tag_default_v1"
+    assert first["version_code"] == "tag_default_v2"
     assert first["status"] == "active"
     assert second["version_code"] == first["version_code"]
 
@@ -107,7 +107,7 @@ def test_classifier_cancels_stale_review_tasks_after_new_rule_version(test_db, t
                 market_id="btc-up-down-test",
                 question="Bitcoin Up or Down - April 9, 9:45PM-10:00PM ET",
                 category_raw="Up or Down",
-                market_status="active_accepting_orders",
+                market_status="inactive_from_feed",
                 creation_time=now - timedelta(days=2),
                 open_time=now - timedelta(days=1),
                 close_time=now + timedelta(hours=2),
@@ -181,7 +181,7 @@ def test_classifier_cancels_stale_review_tasks_after_new_rule_version(test_db, t
         assert latest is not None
         assert latest.classification_status == "Tagged"
         assert latest.admission_bucket_code == "LIST_WHITE"
-        assert latest.primary_category_code == "CAT_NUMERIC"
+        assert latest.primary_category_code == "CAT_CRYPTO_ASSET"
     finally:
         session.close()
 
@@ -206,7 +206,7 @@ def test_seed_default_rule_version_restores_superseded_baseline(test_db, monkeyp
     assert restored["status"] == "active"
     assert restored["release_kind"] == "rollback"
     assert restored["base_version_code"] == baseline["version_code"]
-    assert restored["version_code"] == "tag_default_v1_restore_20260409_080000"
+    assert restored["version_code"] == "tag_default_v2_restore_20260409_080000"
 
     session = SessionLocal()
     try:
@@ -215,6 +215,188 @@ def test_seed_default_rule_version_restores_superseded_baseline(test_db, monkeyp
         ).all()
         assert len(active_versions) == 1
         assert active_versions[0].version_code == restored["version_code"]
+    finally:
+        session.close()
+
+
+def test_default_rules_auto_decide_common_market_shapes(test_db, test_settings, monkeypatch):
+    SessionLocal = test_db
+    _patch_session_scope(monkeypatch, SessionLocal)
+
+    service = TaggingRuleService()
+    service.seed_default_dictionary(actor_id="tester")
+    default_version = service.seed_default_rule_version(actor_id="tester")
+
+    now = datetime.now(UTC)
+    markets = [
+        Market(
+            id=uuid.uuid4(),
+            market_id="sports-ou-test",
+            question="Ehime FC vs. Kataller Toyama: O/U 3.5",
+            description="This market resolves based on the final score after regulation time.",
+            category_raw=None,
+            market_status="active_accepting_orders",
+            creation_time=now - timedelta(days=2),
+            open_time=now - timedelta(days=1),
+            close_time=now + timedelta(hours=6),
+            source_updated_at=now,
+        ),
+        Market(
+            id=uuid.uuid4(),
+            market_id="esports-map-test",
+            question="Valorant: All Gamers vs Bilibili Gaming - Map 2 Winner",
+            description="This market refers to the Valorant match between All Gamers and Bilibili Gaming.",
+            category_raw=None,
+            market_status="active_accepting_orders",
+            creation_time=now - timedelta(days=2),
+            open_time=now - timedelta(days=1),
+            close_time=now + timedelta(hours=6),
+            source_updated_at=now,
+        ),
+        Market(
+            id=uuid.uuid4(),
+            market_id="sports-win-test",
+            question="Will AC Milan win on 2026-04-26?",
+            description=(
+                "In the upcoming game, scheduled for April 26, 2026. "
+                "This market refers only to the outcome within the first 90 minutes of regular play plus stoppage time. "
+                "The primary resolution source for this market is the official statistics of the event."
+            ),
+            category_raw=None,
+            market_status="active_accepting_orders",
+            creation_time=now - timedelta(days=2),
+            open_time=now - timedelta(days=1),
+            close_time=now + timedelta(hours=6),
+            source_updated_at=now,
+        ),
+        Market(
+            id=uuid.uuid4(),
+            market_id="crypto-up-down-test",
+            question="XRP Up or Down - April 13, 6:45PM-6:50PM ET",
+            description="This market resolves based on the XRP price at the end of the interval.",
+            category_raw=None,
+            market_status="active_accepting_orders",
+            creation_time=now - timedelta(days=2),
+            open_time=now - timedelta(days=1),
+            close_time=now + timedelta(hours=1),
+            source_updated_at=now,
+        ),
+        Market(
+            id=uuid.uuid4(),
+            market_id="esports-special-shape-test",
+            question="Game 2: Both Teams Destroy Inhibitors?",
+            description="League of Legends match special prop market.",
+            category_raw=None,
+            market_status="active_accepting_orders",
+            creation_time=now - timedelta(days=2),
+            open_time=now - timedelta(days=1),
+            close_time=now + timedelta(hours=6),
+            source_updated_at=now,
+        ),
+    ]
+    market_ids = [market.id for market in markets]
+
+    session = SessionLocal()
+    try:
+        session.add_all(markets)
+        session.commit()
+    finally:
+        session.close()
+
+    test_settings.tagging_market_limit = 10
+    classifier = MarketAutoClassificationService(test_settings)
+    result = classifier.classify_markets(classified_at=now)
+
+    assert result["created"] == 5
+    assert result["Tagged"] == 1
+    assert result["Blocked"] == 4
+    assert result["ReviewRequired"] == 0
+    assert result["review_tasks_created"] == 0
+
+    session = SessionLocal()
+    try:
+        results = {
+            classification.market_ref_id: classification
+            for classification in session.scalars(
+                select(MarketClassificationResult).where(
+                    MarketClassificationResult.rule_version == default_version["version_code"]
+                )
+            ).all()
+        }
+        queued_tasks = session.scalars(select(MarketReviewTask)).all()
+        assert queued_tasks == []
+
+        crypto_result = results[market_ids[3]]
+        assert crypto_result.classification_status == "Tagged"
+        assert crypto_result.primary_category_code == "CAT_CRYPTO_ASSET"
+        assert crypto_result.admission_bucket_code == "LIST_WHITE"
+        assert crypto_result.requires_review is False
+
+        for market_id in [market_ids[0], market_ids[1], market_ids[2], market_ids[4]]:
+            sports_result = results[market_id]
+            assert sports_result.classification_status == "Blocked"
+            assert sports_result.primary_category_code == "CAT_SPORTS"
+            assert sports_result.admission_bucket_code == "LIST_BLACK"
+            assert sports_result.requires_review is False
+    finally:
+        session.close()
+
+
+def test_classifier_auto_blocks_unknown_markets_without_manual_review(test_db, test_settings, monkeypatch):
+    SessionLocal = test_db
+    _patch_session_scope(monkeypatch, SessionLocal)
+
+    service = TaggingRuleService()
+    service.seed_default_dictionary(actor_id="tester")
+    default_version = service.seed_default_rule_version(actor_id="tester")
+
+    now = datetime.now(UTC)
+    market_id = uuid.uuid4()
+
+    session = SessionLocal()
+    try:
+        session.add(
+            Market(
+                id=market_id,
+                market_id="unknown-shape-test",
+                question="Will this experimental market format resolve before Friday?",
+                description="No known default rule should match this question.",
+                category_raw=None,
+                market_status="active_accepting_orders",
+                creation_time=now - timedelta(days=1),
+                open_time=now - timedelta(hours=12),
+                close_time=now + timedelta(hours=12),
+                source_updated_at=now,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    test_settings.tagging_market_limit = 10
+    classifier = MarketAutoClassificationService(test_settings)
+    result = classifier.classify_markets(classified_at=now)
+
+    assert result["created"] == 1
+    assert result["Blocked"] == 1
+    assert result["ReviewRequired"] == 0
+    assert result["review_tasks_created"] == 0
+
+    session = SessionLocal()
+    try:
+        latest = session.scalar(
+            select(MarketClassificationResult).where(
+                MarketClassificationResult.market_ref_id == market_id,
+                MarketClassificationResult.rule_version == default_version["version_code"],
+            )
+        )
+        assert latest is not None
+        assert latest.classification_status == "Blocked"
+        assert latest.primary_category_code is None
+        assert latest.admission_bucket_code == "LIST_BLACK"
+        assert latest.requires_review is False
+        assert latest.failure_reason_code == "TAG_NO_CATEGORY_MATCH"
+        assert session.scalars(select(MarketReviewTask)).all() == []
     finally:
         session.close()
 

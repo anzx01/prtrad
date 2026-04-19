@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -32,6 +32,11 @@ from services.review.service import (
 
 ACTIVE_TAGGING_VERSION_STATUS = "active"
 CLASSIFIABLE_MARKET_STATUSES = ("active_accepting_orders", "active_open", "active_paused")
+RECLASSIFIABLE_REVIEW_QUEUE_STATUSES = (
+    REVIEW_STATUS_PENDING,
+    REVIEW_STATUS_OPEN,
+    REVIEW_STATUS_IN_PROGRESS,
+)
 SYSTEM_RULE_CODE_PREFIX = "SYSTEM"
 
 # Confidence calculation constants
@@ -198,13 +203,7 @@ class MarketAutoClassificationService:
             select(MarketReviewTask).where(
                 MarketReviewTask.market_ref_id == market_ref_id,
                 MarketReviewTask.classification_result_id != current_classification_result_id,
-                MarketReviewTask.queue_status.in_(
-                    (
-                        REVIEW_STATUS_PENDING,
-                        REVIEW_STATUS_OPEN,
-                        REVIEW_STATUS_IN_PROGRESS,
-                    )
-                ),
+                MarketReviewTask.queue_status.in_(RECLASSIFIABLE_REVIEW_QUEUE_STATUSES),
             )
         ).all()
 
@@ -316,10 +315,22 @@ class MarketAutoClassificationService:
 
         with session_scope() as session:
             active_version = self._load_active_rule_version(session)
+            unresolved_review_market_ids = select(MarketReviewTask.market_ref_id).where(
+                MarketReviewTask.queue_status.in_(RECLASSIFIABLE_REVIEW_QUEUE_STATUSES)
+            )
+            review_queue_priority = case(
+                (Market.id.in_(unresolved_review_market_ids), 0),
+                else_=1,
+            )
             stmt = (
                 select(Market)
-                .where(Market.market_status.in_(CLASSIFIABLE_MARKET_STATUSES))
-                .order_by(Market.source_updated_at.desc(), Market.updated_at.desc())
+                .where(
+                    or_(
+                        Market.market_status.in_(CLASSIFIABLE_MARKET_STATUSES),
+                        Market.id.in_(unresolved_review_market_ids),
+                    )
+                )
+                .order_by(review_queue_priority, Market.source_updated_at.desc(), Market.updated_at.desc())
             )
             if effective_market_limit:
                 stmt = stmt.limit(effective_market_limit)
@@ -461,6 +472,9 @@ class MarketAutoClassificationService:
         strip_punctuation = bool(matching_config.get("strip_punctuation", True))
         low_confidence_threshold = float(review_config.get("low_confidence_threshold", 0.65))
         conflict_requires_review = bool(review_config.get("conflict_requires_review", True))
+        manual_review_enabled = bool(self._settings.tagging_manual_review_enabled)
+        grey_bucket_code = admission_config.get("grey_bucket_code", "LIST_GREY")
+        black_bucket_code = admission_config.get("black_bucket_code", "LIST_BLACK")
 
         raw_texts, normalized_texts = self._build_market_texts(
             market,
@@ -547,11 +561,11 @@ class MarketAutoClassificationService:
         factor_codes = sorted(factor_candidates.keys())
         conflict_count = 0
         failure_reason_code = None
-        requires_review = False
+        decision_needs_guardrail = False
 
         if not selected_category_code:
             failure_reason_code = "TAG_NO_CATEGORY_MATCH"
-            requires_review = True
+            decision_needs_guardrail = True
             explanations.append(
                 _system_explanation(
                     rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_NO_CATEGORY_MATCH",
@@ -564,7 +578,7 @@ class MarketAutoClassificationService:
         elif len(category_candidates) > 1:
             conflict_count += len(category_candidates) - 1
             if conflict_requires_review:
-                requires_review = True
+                decision_needs_guardrail = True
                 failure_reason_code = failure_reason_code or "TAG_CATEGORY_CONFLICT"
             explanations.append(
                 _system_explanation(
@@ -577,13 +591,13 @@ class MarketAutoClassificationService:
             )
 
         if not selected_bucket_code:
-            selected_bucket_code = admission_config.get("grey_bucket_code", "LIST_GREY")
-            requires_review = True
+            selected_bucket_code = grey_bucket_code if manual_review_enabled else black_bucket_code
+            decision_needs_guardrail = True
             failure_reason_code = failure_reason_code or "TAG_NO_BUCKET_MATCH"
             explanations.append(
                 _system_explanation(
-                    rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_DEFAULT_GREY_BUCKET",
-                    rule_name="Default grey bucket",
+                    rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_DEFAULT_FALLBACK_BUCKET",
+                    rule_name="Default fallback bucket",
                     action_type="set_admission_bucket",
                     explanation_type="default_bucket",
                     target_tag_code=selected_bucket_code,
@@ -592,7 +606,7 @@ class MarketAutoClassificationService:
             )
         elif len(bucket_candidates) > 1:
             conflict_count += len(bucket_candidates) - 1
-            requires_review = True
+            decision_needs_guardrail = True
             failure_reason_code = failure_reason_code or "TAG_BUCKET_CONFLICT"
             explanations.append(
                 _system_explanation(
@@ -605,7 +619,7 @@ class MarketAutoClassificationService:
             )
 
         if review_reasons:
-            requires_review = True
+            decision_needs_guardrail = True
             failure_reason_code = failure_reason_code or review_reasons[0]
 
         confidence = self._calculate_confidence(
@@ -614,12 +628,12 @@ class MarketAutoClassificationService:
             category_candidates=category_candidates,
             bucket_candidates=bucket_candidates,
             low_confidence_threshold=low_confidence_threshold,
-            requires_review=requires_review,
+            requires_review=decision_needs_guardrail,
             conflict_count=conflict_count,
         )
 
         if confidence < low_confidence_threshold:
-            requires_review = True
+            decision_needs_guardrail = True
             failure_reason_code = failure_reason_code or "TAG_LOW_CONFIDENCE"
             explanations.append(
                 _system_explanation(
@@ -635,12 +649,26 @@ class MarketAutoClassificationService:
                 )
             )
 
+        manual_review_required = manual_review_enabled and decision_needs_guardrail
+        if not manual_review_enabled and decision_needs_guardrail and selected_bucket_code != black_bucket_code:
+            selected_bucket_code = black_bucket_code
+            explanations.append(
+                _system_explanation(
+                    rule_code=f"{SYSTEM_RULE_CODE_PREFIX}_AUTO_BLOCK_UNCERTAIN",
+                    rule_name="Auto block uncertain market",
+                    action_type="set_admission_bucket",
+                    explanation_type="automation_guardrail",
+                    target_tag_code=selected_bucket_code,
+                    explanation_payload={"reason_code": failure_reason_code or "TAG_MANUAL_REVIEW"},
+                )
+            )
+
         classification_status = "Tagged"
-        if selected_bucket_code == admission_config.get("black_bucket_code", "LIST_BLACK"):
+        if selected_bucket_code == black_bucket_code:
             classification_status = "Blocked"
-            requires_review = True
+            manual_review_required = False
             failure_reason_code = failure_reason_code or "TAG_BLACKLIST_MATCH"
-        elif requires_review:
+        elif manual_review_required:
             classification_status = "ReviewRequired"
 
         assignments = self._build_assignments(
@@ -656,10 +684,10 @@ class MarketAutoClassificationService:
         )
 
         review_task = None
-        if classification_status in {"ReviewRequired", "Blocked"}:
+        if manual_review_required:
             review_task = {
                 "review_reason_code": failure_reason_code or "TAG_MANUAL_REVIEW",
-                "priority": "high" if classification_status == "Blocked" or conflict_count > 0 else "normal",
+                "priority": "high" if conflict_count > 0 else "normal",
                 "review_payload": {
                     "classification_status": classification_status,
                     "primary_category_code": selected_category_code,
@@ -675,7 +703,7 @@ class MarketAutoClassificationService:
             "primary_category_code": selected_category_code,
             "admission_bucket_code": selected_bucket_code,
             "confidence": confidence,
-            "requires_review": requires_review,
+            "requires_review": manual_review_required,
             "conflict_count": conflict_count,
             "failure_reason_code": failure_reason_code,
             "assignments": assignments,
@@ -684,7 +712,7 @@ class MarketAutoClassificationService:
             "result_details": {
                 "summary": {
                     "classification_status": classification_status,
-                    "requires_review": requires_review,
+                    "requires_review": manual_review_required,
                     "primary_category_code": selected_category_code,
                     "admission_bucket_code": selected_bucket_code,
                     "risk_factor_codes": factor_codes,

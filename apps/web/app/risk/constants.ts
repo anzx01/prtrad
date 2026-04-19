@@ -90,6 +90,40 @@ export function formatThresholdMetricLabel(value: ThresholdMetric | string): str
   return THRESHOLD_METRIC_LABELS[value as ThresholdMetric] ?? value
 }
 
+export function buildSuggestedKillSwitchReason({
+  requestType,
+  currentState,
+  breachedClusters,
+}: {
+  requestType: string
+  currentState: string
+  breachedClusters: string[]
+}): string {
+  const preview = breachedClusters.slice(0, 3).join("、")
+  const suffix = breachedClusters.length > 3 ? " 等" : ""
+  const currentStateLabel = formatRiskStateLabel(currentState)
+
+  if (requestType === "risk_off") {
+    if (breachedClusters.length > 0) {
+      return `检测到 ${breachedClusters.length} 个越限簇（${preview}${suffix}），申请切到 RiskOff，先限制新增风险并等待人工复核。`
+    }
+    return `当前风险状态为 ${currentStateLabel}，申请切到 RiskOff，先人工接管后再决定是否恢复自动链路。`
+  }
+
+  if (requestType === "freeze") {
+    if (breachedClusters.length > 0) {
+      return `检测到越限簇仍未解除（${preview}${suffix}），申请先冻结交易，避免继续扩大风险暴露。`
+    }
+    return `当前风险状态为 ${currentStateLabel}，申请先冻结交易，等待人工复核后再恢复。`
+  }
+
+  if (requestType === "unfreeze") {
+    return `当前风险状态为 ${currentStateLabel}，申请解除冻结并恢复自动链路。提交前请确认越限簇与待审批请求都已处理。`
+  }
+
+  return "请说明为什么需要这条人工风险动作。"
+}
+
 export function getRiskErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message

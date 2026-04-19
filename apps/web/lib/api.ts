@@ -1,7 +1,3 @@
-/**
- * Shared API client for all frontend requests
- */
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
 export interface ApiError {
@@ -37,9 +33,41 @@ function buildNetworkError(url: string, error: unknown): ApiRequestError {
 
   return new ApiRequestError({
     status: 0,
-    message: `无法连接 API 服务：${API_URL}。请确认 API 已启动；如果页面数据能加载但点击操作时报错，更可能是浏览器拦截了跨域预检请求。`,
+    message: `无法连接 API 服务：${API_URL}。请确认 API 已启动；如果页面能加载但点击操作时报错，通常是跨域预检被浏览器拦截了。`,
     details: `${url} :: ${details}`,
   })
+}
+
+function extractApiErrorMessage(errorBody: unknown): string | null {
+  if (!errorBody || typeof errorBody !== "object") {
+    return null
+  }
+
+  const candidate = errorBody as { detail?: unknown; message?: unknown }
+  if (typeof candidate.detail === "string" && candidate.detail.trim()) {
+    return candidate.detail
+  }
+  if (Array.isArray(candidate.detail)) {
+    const messages = candidate.detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item
+        }
+        if (item && typeof item === "object" && "msg" in item) {
+          const msg = (item as { msg?: unknown }).msg
+          return typeof msg === "string" ? msg : null
+        }
+        return null
+      })
+      .filter((item): item is string => Boolean(item && item.trim()))
+    if (messages.length > 0) {
+      return messages.join("; ")
+    }
+  }
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return candidate.message
+  }
+  return null
 }
 
 export async function apiGet<T>(endpoint: string): Promise<T> {
@@ -61,9 +89,10 @@ export async function apiGet<T>(endpoint: string): Promise<T> {
       }
       try {
         const errorBody = await response.json()
+        error.message = extractApiErrorMessage(errorBody) ?? error.message
         error.details = JSON.stringify(errorBody)
       } catch {
-        // Ignore JSON parse errors
+        // Ignore JSON parse errors.
       }
       throw new ApiRequestError(error)
     }
@@ -89,6 +118,7 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
       Accept: "application/json",
     }
     let serializedBody: string | undefined
+
     if (body !== undefined) {
       headers["Content-Type"] = "application/json"
       serializedBody = JSON.stringify(body)
@@ -107,9 +137,10 @@ export async function apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
       }
       try {
         const errorBody = await response.json()
+        error.message = extractApiErrorMessage(errorBody) ?? error.message
         error.details = JSON.stringify(errorBody)
       } catch {
-        // Ignore JSON parse errors
+        // Ignore JSON parse errors.
       }
       throw new ApiRequestError(error)
     }

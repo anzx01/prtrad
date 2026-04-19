@@ -9,5 +9,4 @@ Write-Host "清理 .next 目录..." -ForegroundColor Yellow
 Remove-Item -Path "$PSScriptRoot\..\apps\web\.next" -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "启动前端开发服务器..." -ForegroundColor Green
-Set-Location "$PSScriptRoot\..\apps\web"
-npm run dev
+powershell -ExecutionPolicy Bypass -File "$PSScriptRoot\dev-web.ps1"

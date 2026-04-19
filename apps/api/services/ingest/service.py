@@ -691,6 +691,9 @@ def get_polymarket_ingest_service() -> PolymarketIngestService:
         gamma_client=PolymarketGammaClient(
             base_url=settings.polymarket_gamma_api_url,
             timeout_seconds=settings.ingest_http_timeout_seconds,
+            retry_max_attempts=settings.ingest_gamma_retry_max_attempts,
+            retry_base_delay_seconds=settings.ingest_gamma_retry_base_delay_seconds,
+            retry_max_delay_seconds=settings.ingest_gamma_retry_max_delay_seconds,
         ),
         clob_client=PolymarketClobClient(
             base_url=settings.polymarket_clob_api_url,

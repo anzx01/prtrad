@@ -23,6 +23,7 @@ from app.routes import (
     shadow,
     tag_quality,
     tagging,
+    trading,
 )
 from middleware import request_context_middleware
 
@@ -64,6 +65,7 @@ app.include_router(risk.router)
 app.include_router(backtests.router)
 app.include_router(shadow.router)
 app.include_router(launch_review.router)
+app.include_router(trading.router)
 
 
 def _build_error_response_headers(request: Request, request_id: str) -> dict[str, str]:

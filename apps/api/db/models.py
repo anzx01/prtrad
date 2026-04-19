@@ -798,3 +798,62 @@ class LaunchReview(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False
     )
+
+
+class TradingRuntimeState(TimestampMixin, Base):
+    __tablename__ = "trading_runtime_states"
+    __table_args__ = (
+        Index("ix_trading_runtime_states_status_mode", "status", "mode"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="paper")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="stopped")
+    started_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stopped_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_stop_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_stop_reason_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_stop_was_automatic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_guard_snapshot: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+
+
+class TradingOrderRecord(TimestampMixin, Base):
+    __tablename__ = "trading_order_records"
+    __table_args__ = (
+        Index("ix_trading_order_records_status_mode", "status", "mode"),
+        Index("ix_trading_order_records_market_ref_id_created_at", "market_ref_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    trading_runtime_state_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("trading_runtime_states.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    market_ref_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("markets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="paper_engine")
+    market_id_snapshot: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    question_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome_side: Mapped[str] = mapped_column(String(8), nullable=False, default="yes")
+    token_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    order_price: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    order_size: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    notional_amount: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    expected_net_ev: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    requested_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    provider_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    failure_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    failure_reason_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_details: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

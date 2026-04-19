@@ -46,6 +46,12 @@ class ReasonCatalogEntry:
     sort_order: int
 
 
+def _coerce_reason_codes(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item]
+
+
 REASON_CATALOG: dict[str, ReasonCatalogEntry] = {
     "SCORING_RESULT_MISSING": ReasonCatalogEntry(
         reason_name="缺少评分结果",
@@ -332,6 +338,23 @@ class NetEVService:
         latest_scoring = self._latest_scoring_result(candidate.market_ref_id)
         latest_dq = self._latest_dq_result(candidate.market_ref_id)
         reason_details = self._resolve_reason_details(candidate.rejection_reason_code)
+        dq_blocking_reason_codes: list[str] = []
+        dq_warning_reason_codes: list[str] = []
+        dq_primary_reason_code: str | None = None
+        dq_primary_reason_details: ReasonCatalogEntry | None = None
+
+        if latest_dq is not None:
+            dq_details = latest_dq.result_details if isinstance(latest_dq.result_details, dict) else {}
+            dq_blocking_reason_codes = _coerce_reason_codes(dq_details.get("blocking_reason_codes"))
+            dq_warning_reason_codes = _coerce_reason_codes(dq_details.get("warning_reason_codes"))
+            dq_primary_reason_code = (
+                dq_blocking_reason_codes[0]
+                if dq_blocking_reason_codes
+                else dq_warning_reason_codes[0]
+                if dq_warning_reason_codes
+                else None
+            )
+            dq_primary_reason_details = self._resolve_reason_details(dq_primary_reason_code)
 
         return {
             "id": candidate.id,
@@ -356,6 +379,12 @@ class NetEVService:
             "rejection_reason_description": reason_details.description if reason_details else None,
             "scoring_recommendation": latest_scoring.admission_recommendation if latest_scoring else None,
             "dq_status": latest_dq.status if latest_dq else None,
+            "dq_checked_at": latest_dq.checked_at if latest_dq else None,
+            "dq_blocking_reason_codes": dq_blocking_reason_codes,
+            "dq_warning_reason_codes": dq_warning_reason_codes,
+            "dq_primary_reason_code": dq_primary_reason_code,
+            "dq_primary_reason_name": dq_primary_reason_details.reason_name if dq_primary_reason_details else None,
+            "dq_primary_reason_description": dq_primary_reason_details.description if dq_primary_reason_details else None,
             "rule_version": self.settings.rule_version,
             "evaluated_at": candidate.evaluated_at,
         }

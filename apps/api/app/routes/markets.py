@@ -7,9 +7,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
-from db.models import DataQualityResult, Market, MarketSnapshot
+from db.models import DataQualityResult, Market, MarketClassificationResult, MarketSnapshot
 from db.session import get_db
 
 
@@ -30,6 +30,32 @@ class MarketDetailResponse(BaseModel):
     latest_dq_result: dict[str, Any] | None
 
 
+def _latest_classification_field_subquery(field_name: str):
+    return (
+        select(getattr(MarketClassificationResult, field_name))
+        .where(MarketClassificationResult.market_ref_id == Market.id)
+        .order_by(
+            desc(MarketClassificationResult.classified_at),
+            desc(MarketClassificationResult.created_at),
+        )
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def _latest_dq_field_subquery(field_name: str):
+    return (
+        select(getattr(DataQualityResult, field_name))
+        .where(DataQualityResult.market_ref_id == Market.id)
+        .order_by(
+            desc(DataQualityResult.checked_at),
+            desc(DataQualityResult.created_at),
+        )
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
 @router.get("", response_model=MarketListResponse)
 def list_markets(
     request: Request,
@@ -40,9 +66,13 @@ def list_markets(
     category: str | None = Query(None, description="Filter by category"),
     dq_status: str | None = Query(None, description="Filter by DQ status (pass/warn/fail)"),
     search: str | None = Query(None, description="Search in question"),
+    only_allowed: bool = Query(False, description="Only include markets that auto-passed tagging"),
 ) -> MarketListResponse:
     """List markets with filtering and pagination."""
     stmt = select(Market).order_by(desc(Market.source_updated_at), desc(Market.updated_at))
+    latest_classification_status = _latest_classification_field_subquery("classification_status")
+    latest_admission_bucket_code = _latest_classification_field_subquery("admission_bucket_code")
+    latest_dq_status = _latest_dq_field_subquery("status")
 
     # Apply filters
     if status:
@@ -51,6 +81,13 @@ def list_markets(
         stmt = stmt.where(Market.category_raw.ilike(f"%{category}%"))
     if search:
         stmt = stmt.where(Market.question.ilike(f"%{search}%"))
+    if dq_status:
+        stmt = stmt.where(latest_dq_status == dq_status)
+    if only_allowed:
+        stmt = stmt.where(
+            latest_classification_status == "Tagged",
+            latest_admission_bucket_code == "LIST_WHITE",
+        )
 
     # Count total
     count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -80,6 +117,60 @@ def list_markets(
         }
         for market in markets
     ]
+
+    market_ids = [market.id for market in markets]
+    latest_classifications: dict[UUID, MarketClassificationResult] = {}
+    latest_dq_results: dict[UUID, DataQualityResult] = {}
+
+    if market_ids:
+        classification_rows = session.scalars(
+            select(MarketClassificationResult)
+            .where(MarketClassificationResult.market_ref_id.in_(market_ids))
+            .order_by(
+                MarketClassificationResult.market_ref_id.asc(),
+                desc(MarketClassificationResult.classified_at),
+                desc(MarketClassificationResult.created_at),
+            )
+        ).all()
+        for classification in classification_rows:
+            latest_classifications.setdefault(classification.market_ref_id, classification)
+
+        dq_rows = session.scalars(
+            select(DataQualityResult)
+            .where(DataQualityResult.market_ref_id.in_(market_ids))
+            .order_by(
+                DataQualityResult.market_ref_id.asc(),
+                desc(DataQualityResult.checked_at),
+                desc(DataQualityResult.created_at),
+            )
+        ).all()
+        for dq_result in dq_rows:
+            latest_dq_results.setdefault(dq_result.market_ref_id, dq_result)
+
+    for item, market in zip(market_data, markets, strict=False):
+        classification = latest_classifications.get(market.id)
+        dq_result = latest_dq_results.get(market.id)
+        item["latest_classification"] = (
+            {
+                "classification_status": classification.classification_status,
+                "primary_category_code": classification.primary_category_code,
+                "admission_bucket_code": classification.admission_bucket_code,
+                "confidence": float(classification.confidence) if classification.confidence is not None else None,
+                "failure_reason_code": classification.failure_reason_code,
+                "classified_at": classification.classified_at.isoformat(),
+            }
+            if classification
+            else None
+        )
+        item["latest_dq"] = (
+            {
+                "status": dq_result.status,
+                "score": float(dq_result.score) if dq_result.score is not None else None,
+                "checked_at": dq_result.checked_at.isoformat(),
+            }
+            if dq_result
+            else None
+        )
 
     return MarketListResponse(
         markets=market_data,

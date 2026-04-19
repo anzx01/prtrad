@@ -1,36 +1,17 @@
 # Polymarket Tail Risk Console
 
-用于研究、准入、风控、影子运行与上线评审的 Polymarket 尾部风险控制台。
+用于研究、准入、风控、回测、影子验证与交易开关控制的单页控制台。
 
-当前项目的核心目标不是做一组分散页面，而是打通这条业务主链路：
+## 当前默认入口
 
-`市场数据 -> 数据质量 DQ -> 标签分类 -> 人工审核 -> NetEV / 校准 -> 组合风控 -> 回测 -> 影子运行 -> 上线评审`
+- 唯一入口：`/`
+- 旧入口如 `/markets`、`/launch-review`、`/review`、`/dq`、`/tagging`、`/monitoring`、`/risk`、`/reports` 会自动跳回 `/`
+- 人工审核默认关闭
+- 自动分类无法可靠放行的市场，会直接自动拦截，不再进入人工审核队列
 
-## 当前里程碑
+## 当前主链路
 
-- `M1`：数据接入与 DQ 基础
-- `M2`：标签分类、审核队列、基础报表
-- `M3`：校准单元与 NetEV 准入
-- `M4`：组合风控、状态机、Kill-switch、阈值维护
-- `M5`：回测实验室、日报、周报、阶段评审
-- `M6`：影子运行、上线前门槛、Go/NoGo
-- `M7`：本轮暂不实施
-
-## 项目结构
-
-```text
-prtrad/
-├─ apps/
-│  ├─ api/                 # FastAPI 后端
-│  │  ├─ app/              # 路由与应用入口
-│  │  ├─ db/               # SQLAlchemy 模型与 Alembic
-│  │  └─ services/         # 业务服务层
-│  └─ web/                 # Next.js 前端
-├─ docs/                   # 正式文档与开发进度
-├─ scripts/                # 统一脚本入口（PowerShell 优先）
-├─ tests/                  # 测试
-└─ workers/                # Celery Worker 与调度任务
-```
+`市场数据 -> 数据质量 DQ -> 标签分类 -> 自动拦截/放行 -> NetEV / 校准 -> 组合风控 -> 回测 -> 影子验证 -> 交易开关 / 自动上线`
 
 ## 本地启动
 
@@ -58,13 +39,13 @@ npm run db:upgrade
 npm run dev
 ```
 
-启动后默认地址：
+默认地址：
 
-- Web：`http://localhost:3000`
+- Web：`http://localhost:3001`
 - API：`http://localhost:8000`
 - API Docs：`http://localhost:8000/docs`
 
-如果前端提示连不上 API，先检查：
+如需确认 API 是否存活：
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/health
@@ -83,6 +64,12 @@ npm run dev:beat
 npm run build:web
 ```
 
+说明：
+
+- 前端开发服务器默认使用 `3001`
+- 如需改端口，可运行：`powershell -ExecutionPolicy Bypass -File .\scripts\dev-web.ps1 -Port 3002`
+- 或先设置环境变量：`$env:WEB_PORT=3002`
+
 数据库：
 
 ```powershell
@@ -91,7 +78,7 @@ npm run db:downgrade
 npm run db:current
 ```
 
-任务触发：
+主链路任务：
 
 ```powershell
 npm run task:market-sync
@@ -99,10 +86,12 @@ npm run task:snapshot-sync
 npm run task:dq-run
 npm run task:tagging-run
 npm run task:refresh-evidence-pack
-npm run health:dq
-npm run dq:baseline
-npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
-npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
+npm run task:trading -- -Action state
+npm run task:trading -- -Action start-paper
+npm run task:trading -- -Action start-live
+npm run task:trading -- -Action stop
+npm run task:trading -- -Action execute-next
+npm run task:trading -- -Action orders
 ```
 
 测试：
@@ -114,269 +103,170 @@ npm run test:worker
 python -m pytest -q
 ```
 
-## 页面路由
+## 单页控制台
 
-- `/`：智能驾驶舱首页
-- `/markets`：市场总表
-- `/dq`：数据质量看板
-- `/tagging`：标签分类
-- `/review`：人工审核队列（支持全选当前页、全选当前筛选与一键审核）
-- `/lists`：名单管理
-- `/monitoring`：系统监控
-- `/tag-quality`：标签质量
-- `/reports`：日报、周报、阶段评审智能速读
-- `/calibration`：校准单元
-- `/netev`：NetEV 准入
-- `/risk`：组合风控（先给判断，再看暴露 / Kill-switch / 阈值）
-- `/state-alerts`：状态与告警
-- `/backtests`：回测实验室
-- `/launch-review`：影子运行与上线评审（先给 Go/NoGo 判断，再进入评审操作）
+根路径 `/` 是唯一需要看的页面。
 
-## 智能驾驶舱首页
+页面保留 3 个核心区块：
 
-根路径 `/` 已从静态导航页改造成“智能驾驶舱”。
+- `自动动作`
+- `市场总表`
+- `自动上线`
 
-首页会自动并行汇总：
+页面会自动并行汇总：
 
 - `/monitoring/metrics`
-- `/dq/summary`
-- `/review/queue`
-- `/risk/state`
-- `/risk/exposures`
+- `/markets`
 - `/risk/kill-switch?status=pending`
-- `/calibration/units?include_inactive=true`
 - `/backtests`
 - `/shadow`
-- `/launch-review`
 - `/reports`
+- `/trading/state`
 
-首页会直接给出三类结果：
+首页支持的自动动作：
 
-- 系统当前判断：告诉你真正卡在哪里
-- 下一步建议：把最值得现在处理的动作排在前面
-- 主链路状态：把 DQ、审核、校准、风险、上线门槛、报告归档按工作流展示
-
-首页支持的一键自动化动作：
-
-- 重算风险暴露
-- 重算长窗口校准
-- 运行回测
-- 运行影子运行
-- 生成日报
-- 生成周报
-- 生成 `M4 / M5 / M6` 阶段评审
-- 一键刷新完整证据包
+- `刷新自动证据包`
+- `仅重跑影子`
+- `重新生成报告`
 
 说明：
 
-- 自动化动作按顺序串行执行，避免并发写库
-- 遇到 SQLite 偶发 `database is locked` 时，会做有限次短重试
-- 审核队列这类必须人工处理的事情不会被假装自动化，首页会明确标记这是当前人工瓶颈
+- 自动动作按顺序串行执行，避免并发写库
 - 如需脱离前端直接执行同一套证据刷新链路，可运行 `npm run task:refresh-evidence-pack`
-- 脚本执行日志会写入 `logs/refresh-evidence-pack-*.log`
+- 脚本日志会写入 `logs/refresh-evidence-pack-*.log`
+- 市场总表默认只显示 `LIST_WHITE / 已自动放行` 的市场
 
-## 报表工作台
+## 交易开关
 
-`/reports` 不再只是把日报、周报、阶段评审原样堆出来，而是先把“该看什么、为什么先看、现在卡在哪”解释清楚。
+首页 `/` 的“自动上线”区块现在直接提供：
 
-当前页面结构：
+- `开始纸交易`
+- `开始实盘`
+- `立即停止`
 
-- 顶部“智能速读”：直接告诉你此刻最值得先看的报告
-- “系统建议先看这里”：按当前风险与上线门槛解释阅读顺序
-- `M4 / M5 / M6` 门槛概览：区分“没有报告”与“有报告但结论未通过”
-- 左侧归档列表 + 右侧详情阅读区：避免一堆 JSON 直接砸到页面上
+当前实现重点先放在“能不能开、开了后会不会自动停”，并补上最小可追踪执行闭环：
 
-适合处理的问题：
+- `开始纸交易` 会自动生成第一笔模拟订单
+- 纸交易运行中再次点击同一个按钮，会继续再跑一笔模拟订单
+- 页面会直接展示最近一笔订单的市场、状态、价格、金额和失败原因
+- `开始实盘` 在配置齐全时，会通过官方 CLOB v2 SDK 发出第一笔真实订单
 
-- 日报、周报、阶段评审太多，不知道先看哪份
-- `stage_review` 结论难懂，不知道到底是缺材料，还是已经明确 `NoGo`
-- 想快速判断 `M4 / M5 / M6` 哪一层是真正卡点
+纸交易要求：
 
-## 审核工作台
+- 当前有可执行市场
+- 没有待处理 kill-switch
+- 最新回测不是 `nogo`
+- 最新 shadow 不是 `block`
+- 风险状态不是 `RiskOff / Frozen`
 
-`/review` 已从“只能点进单条慢慢看”的队列页，改成支持单条和批量处理的审核台。
+实盘在以上基础上进一步要求：
 
-支持的审核方式：
+- 最新回测为 `go`
+- 最新 shadow 为 `go`
+- 风险状态为 `Normal`
+- `TRADING_LIVE_MODE_ENABLED=true`
+- `TRADING_LIVE_PRIVATE_KEY` 已配置
 
-- 单条开始审核、通过、拒绝
-- 全选当前页
-- 全选当前筛选结果
-- 一键开始审核已选
-- 一键通过已选
-- 一键拒绝已选
+实盘当前接法：
 
-交互约定：
+- 使用官方 `py_clob_client_v2`
+- 先用私钥创建或派生 L2 API 凭证
+- 再按当前系统选出的最优可执行市场，发出一笔 YES 方向限价单
+- 实盘下单额不再写死，而是按可用资金比例自动计算
+- 系统会限制单日实盘发单次数，避免连续误发
+- 挂单后会自动轮询成交状态；长时间未成交时会自动撤单
+- 实盘前会先检查资金钱包的可用余额和授权额度
 
-- 批量通过或拒绝时，系统会自动把 `pending/open` 任务转成 `in_progress` 再完成审核
-- 页面会直接显示已选数量与当前筛选覆盖范围，减少“到底批了哪些”的不确定感
+自动停机规则：
 
-## 组合风控工作台
+- 如果运行中出现待处理 kill-switch
+- 或风险状态切到 `RiskOff / Frozen`
+- 或最新回测 / shadow 结果转差
 
-`/risk` 不再只是暴露表和阈值表堆叠，而是先告诉用户当前该先处理什么。
+系统会在下一次读取交易状态时自动切回 `stopped`，并记录最后一次停止原因。
 
-当前页面结构：
+当前新增的交易接口：
 
-- 顶部“当前优先事项”：先判断现在更像是风险阻断、人工待办，还是例行观察
-- “系统建议先看这里”：把最值得先处理的风险项排出顺序
-- “当前最该解释的越限簇 / 接近门槛簇”：把注意力集中到真正需要解释的少数簇
-- 保留暴露明细、阈值维护、状态历史、Kill-switch 审批等操作区
+- `/trading/state`
+- `/trading/start`
+- `/trading/stop`
+- `/trading/execute-next`
+- `/trading/orders`
+- `/trading/orders/{order_id}`
 
-适合处理的问题：
-
-- 当前该先处理 Kill-switch、越限簇，还是只是继续观察
-- 风险状态为什么进入 `Caution / RiskOff / Frozen`
-- 暴露和阈值很多时，到底该先解释哪几个簇
-
-## 上线评审工作台
-
-`/launch-review` 不再要求用户自己从 checklist 和证据摘要里拼 Go/NoGo 结论，而是先给当前判断，再进入 shadow 与 review 操作。
-
-当前页面结构：
-
-- 顶部“当前判断”：先说明现在是该先跑 shadow、补证据，还是已经可以进入最终决策
-- “系统建议先看这里”：按 pending review、未过 checklist、shadow 阻断项排序
-- “当前 Go 阻塞项”：直接展示还没过的门槛，而不是只露出原始 checklist label
-- 下方保留 shadow 运行、创建评审、历史记录和 Go/NoGo 决策区
-
-适合处理的问题：
-
-- Go 按钮为什么当前不能点
-- checklist 英文标签或持久化字段分别代表什么业务门槛
-- 现在该先跑 shadow、补 backtest/report，还是记录最终决策
-
-## 最近排障要点
-
-### 1. DQ `pass=0`
-
-- 典型原因不是前端坏了，而是快照链路陈旧，导致命中 `DQ_SNAPSHOT_STALE`
-- 现在已补齐：
-  - `capture_snapshots` 容错增强
-  - `book_fetch_failed_tokens`
-  - source payload 降级快照
-  - `/dq` 页面快照抓取诊断
-  - `npm run health:dq`
-- 如果 `top_blocking_reasons` 里 `REJ_DATA_LEAK_RISK` 偏高，可直接跑：
+命令行统一入口：
 
 ```powershell
-npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
+npm run task:trading -- -Action state
+npm run task:trading -- -Action start-paper
+npm run task:trading -- -Action start-live
+npm run task:trading -- -Action stop
+npm run task:trading -- -Action execute-next
+npm run task:trading -- -Action orders
 ```
 
-- 如果想避开队列延迟，重新跑一轮“同步快照 -> 同步 DQ -> 同批次汇总校验”，可直接执行：
+相关环境变量：
 
-```powershell
-npm run dq:baseline
-```
+- `TRADING_LIVE_MODE_ENABLED`
+  - 默认值为 `false`
+  - 只有确认私钥、funder 与资金钱包都配置正确后再开启
+- `TRADING_DEFAULT_ORDER_SIZE`
+  - 默认值为 `10`
+  - 用于纸交易默认下单数量
+- `TRADING_LIVE_BANKROLL_FRACTION`
+  - 默认值为 `0.02`
+  - 实盘按可用资金的这个比例自动计算下单额
+- `TRADING_LIVE_MIN_NOTIONAL`
+  - 默认值为 `5`
+  - 实盘最小下单额
+- `TRADING_LIVE_MAX_NOTIONAL`
+  - 默认值为 `25`
+  - 实盘最大下单额
+- `TRADING_LIVE_DAILY_ORDER_LIMIT`
+  - 默认值为 `3`
+  - 单日最多允许发出的实盘单数
+- `TRADING_LIVE_STATUS_POLL_ATTEMPTS`
+  - 默认值为 `5`
+  - 挂单后自动查单次数
+- `TRADING_LIVE_STATUS_POLL_INTERVAL_SECONDS`
+  - 默认值为 `2`
+  - 每次自动查单之间的等待秒数
+- `TRADING_LIVE_PRIVATE_KEY`
+  - 实盘钱包私钥
+- `TRADING_LIVE_CHAIN_ID`
+  - 默认 `137`
+- `TRADING_LIVE_SIGNATURE_TYPE`
+  - 默认 `0`
+  - 可选 `0/1/2/3`
+- `TRADING_LIVE_FUNDER_ADDRESS`
+  - 当签名类型不是 `0` 时必填
+- `TRADING_LIVE_API_KEY`
+- `TRADING_LIVE_API_SECRET`
+- `TRADING_LIVE_API_PASSPHRASE`
+  - 可选；如果不填，系统会尝试按私钥自动创建或派生 L2 API 凭证
+- `TRADING_LIVE_USE_SERVER_TIME`
+  - 默认 `true`
+- `TRADING_LIVE_RETRY_ON_ERROR`
+  - 默认 `true`
 
-- 这个脚本会：
-  - 直接同步调用 `capture_snapshots` 与 DQ 服务，不经过 Celery 队列
-  - 给本次同步执行补写 `market_snapshot_capture.execute` 与 `market_dq_scan.execute` 审计日志
-  - 按本次刚生成的 `checked_at` 批次输出汇总，而不是去混读别的定时批次
-  - 默认顺带聚焦 `REJ_DATA_INCOMPLETE`，直接汇总 `matching check` 计数和 `missing_fields` 计数
-- 可选示例：
+## Gamma API 接入约束
 
-```powershell
-npm run dq:baseline -- -MarketLimit 50 -ReasonCode REJ_DATA_INCOMPLETE -ReasonLimit 5
-```
-
-- 脚本日志会写入：
-
-```text
-logs/dq-baseline-*.log
-```
-
-- 该脚本会聚焦最新一批 DQ 结果里命中该原因码的市场，直接输出：
-  - `market_id`
-  - 触发的具体 DQ check
-  - `creation/open/close/resolution`
-  - `latest_snapshot_time / previous_snapshot_time`
-- 现在也会额外输出：
-  - `matching check` 聚合计数
-  - `missing_fields` 聚合计数（适合直接看 `REJ_DATA_INCOMPLETE`）
-- 如果页面看起来“几乎全是 fail”，但 `freshness_status=fresh`，优先再查一次 `REJ_DATA_LEAK_RISK`：
-
-```powershell
-npm run dq:reason -- -ReasonCode REJ_DATA_LEAK_RISK
-```
-
-- 2026-04-19 的最新一次同步基线结果是：
-  - 大量 fail 不是未来快照真的泄漏，而是旧规则把“active 市场的 `snapshot_time > close_time`”直接判成了 `REJ_DATA_LEAK_RISK`
-  - 上游 payload 在部分市场上会出现 `close_time` 已过但 `accepting_orders=true` 仍保持为真的情况
-  - 当前 DQ 已移除这条阻断规则，只保留真正的未来时间检查：`snapshot_time > checked_at + tolerance`
-  - 最新同步基线已收敛到：`pass=9, warn=185, fail=6`
-  - 当前阻断主因已集中到：`REJ_DATA_INCOMPLETE=6`
-- 修复后如果还有 fail，当前应优先看：
-
-```powershell
-npm run dq:reason -- -ReasonCode REJ_DATA_INCOMPLETE
-```
-
-- 这批剩余 fail 目前集中缺失：
-  - `best_ask_no`
-  - `best_bid_yes`
-  - `spread`
-- 也就是说，当前更像是单边盘口 / 快照字段缺失问题，而不是时间泄漏误判。
-
-### 2. Calibration Units 全是 0
-
-- 先查 recent closed/resolved market 是否真的同步进库
-- 再查 calibration 重算是否真的执行
-- 当前系统已补齐：
-  - recent closed/resolved 扫描
-  - `final_resolution` 回填
-  - 从 `outcomePrices` 回退推断历史 resolved 样本
-
-### 3. Review Queue `pending=0`
-
-- 先不要直接怀疑前端
-- 更常见原因是 tagging 自动分类最近没有持续产出 `ReviewRequired/Blocked`
-- 先查：
-
-```powershell
-Invoke-RestMethod "http://localhost:8000/review/queue?queue_status=pending&page=1&page_size=5"
-Invoke-RestMethod "http://localhost:8000/monitoring/metrics"
-```
-
-- 必要时手动补跑：
-
-```powershell
-npm run task:tagging-run
-```
-
-### 4. Launch Review 里 Go 被禁用
-
-- `Create Review` 成功，不等于 checklist 已全部通过
-- 如果 `Go` 被禁用，通常说明 backtest / shadow / stage review / kill-switch 证据还没满足门槛
-- 这表示证据链未通过，不表示页面点击失效
-
-### 5. 审核队列支持方式
-
-- `/review` 现在既支持逐条审核，也支持批量审核
-- 支持：
-  - 全选当前页
-  - 全选当前筛选结果
-  - 一键开始审核已选
-  - 一键通过已选
-  - 一键拒绝已选
-- 批量通过或拒绝时，`pending/open` 任务会自动先转为 `in_progress` 再完成审核
-
-### 6. 前端 hydration mismatch
-
-- 若控制台出现 hydration mismatch，优先先看是否是浏览器翻译、输入法或沉浸式翻译扩展向 DOM 注入了属性
-- 当前已对导航里的 `ApiStatus` 刷新按钮做过防御：
-  - 文本按钮改为稳定 SVG 图标
-  - 增加 `suppressHydrationWarning`
-  - 增加 `translate="no"`
+- `/markets`：`300 次 / 10 秒`
+- `/events`：`500 次 / 10 秒`
+- 所有 Gamma API 端点共享：`4000 次 / 10 秒`
+- 拉全量时统一使用 `limit + offset`
+- 已内置对 `429 / 500 / 502 / 503 / 504` 的指数退避重试
+- 如果上游返回 `Retry-After`，优先按该值等待
 
 ## 关键文档
 
 - 开发进度：[docs/dev-progress.md](docs/dev-progress.md)
+- 环境变量：[docs/environment-variables.md](docs/environment-variables.md)
 - Tagging 默认基线：[docs/tagging/default-bootstrap-v1.md](docs/tagging/default-bootstrap-v1.md)
-- v4 研究 PRD：`polymarket_tail_risk_system_v4_research_prd.md`
 
 ## 协作约定
 
-- 默认使用中文沟通与文档
-- 文本文件统一 UTF-8，优先无 BOM
-- 运行、调试、测试优先走 `scripts/` 或仓库脚本
-- 新功能默认补齐自动化验证
-- 每日收工前更新 `docs/dev-progress.md`
+- 统一遵循仓库根目录下 `AGENTS.md`
+- 文档、说明、注释默认使用中文
+- 文本文件统一使用 UTF-8
+- 日常开发结束前更新 `docs/dev-progress.md`

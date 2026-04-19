@@ -7,6 +7,22 @@ export type ReviewQueueStatus =
 
 export type ReviewPriority = "low" | "normal" | "high" | "urgent"
 export type ReviewBulkAction = "start_review" | "approve" | "reject"
+export type ReviewSystemNextAction = "approve" | "reject" | "view_only"
+
+const REVIEW_PRIORITY_LABELS: Record<ReviewPriority, string> = {
+  low: "低",
+  normal: "普通",
+  high: "高",
+  urgent: "紧急",
+}
+
+const REVIEW_CLASSIFICATION_STATUS_LABELS: Record<string, string> = {
+  Tagged: "已形成分类结果",
+  ReviewRequired: "需要人工审核",
+  Blocked: "命中阻断规则",
+  ClassificationFailed: "分类失败",
+  classified: "已形成分类结果",
+}
 
 const REVIEW_REASON_LABELS: Record<string, string> = {
   TAG_NO_CATEGORY_MATCH: "未匹配到主类别",
@@ -62,12 +78,20 @@ export interface ReviewTaskSummary {
   resolved_at: string | null
   created_at: string
   updated_at: string
+  classification_result: ReviewClassificationResult | null
+  can_approve: boolean
+  approval_block_reason: string | null
+  auto_reject_reason_code: string | null
+  system_conclusion_code: string
+  system_conclusion: string
+  system_reason: string
+  system_next_action: ReviewSystemNextAction
+  system_next_action_label: string
   market: ReviewMarketSummary | null
 }
 
 export interface ReviewTask extends Omit<ReviewTaskSummary, "market"> {
   market: ReviewMarketInfo | null
-  classification_result: ReviewClassificationResult | null
 }
 
 export interface ReviewQueueResponse {
@@ -84,6 +108,36 @@ export interface ReviewTaskDetailResponse {
 export interface ReviewBulkActionResponse {
   tasks: ReviewTaskSummary[]
   updated_count: number
+}
+
+export function getReviewPriorityLabel(value: ReviewPriority | null | undefined): string {
+  if (!value) {
+    return "-"
+  }
+  return REVIEW_PRIORITY_LABELS[value] ?? value
+}
+
+export function formatReviewPriorityDisplay(value: ReviewPriority | null | undefined): string {
+  if (!value) {
+    return "-"
+  }
+  const label = getReviewPriorityLabel(value)
+  return label === value ? value : `${label}（${value}）`
+}
+
+export function getReviewClassificationStatusLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "-"
+  }
+  return REVIEW_CLASSIFICATION_STATUS_LABELS[value] ?? value
+}
+
+export function formatReviewClassificationStatusDisplay(value: string | null | undefined): string {
+  if (!value) {
+    return "-"
+  }
+  const label = getReviewClassificationStatusLabel(value)
+  return label === value ? value : `${label}（${value}）`
 }
 
 export function getReviewReasonLabel(value: string | null | undefined): string {
@@ -106,4 +160,10 @@ export function getReviewReasonDescription(value: string | null | undefined): st
     return null
   }
   return REVIEW_REASON_DESCRIPTIONS[value] ?? null
+}
+
+export function canAutoRejectTask(
+  task: Pick<ReviewTaskSummary, "can_approve" | "auto_reject_reason_code">,
+): boolean {
+  return !task.can_approve && Boolean(task.auto_reject_reason_code)
 }

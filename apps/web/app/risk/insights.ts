@@ -2,11 +2,24 @@ import { formatRiskStateLabel, formatThresholdMetricLabel } from "./constants"
 import type { ExposureItem, KillSwitchItem, RiskStateData, ThresholdItem } from "./types"
 
 type InsightTone = "info" | "good" | "warn" | "bad"
+export type RiskJumpTarget =
+  | "state"
+  | "exposures"
+  | "kill-switch-form"
+  | "kill-switch-pending"
+  | "thresholds"
+  | "history"
+
+export interface RiskHeadlineAction {
+  label: string
+  target: RiskJumpTarget
+}
 
 export interface RiskHeadline {
   title: string
   description: string
   tone: "safe" | "warning" | "danger"
+  actions: RiskHeadlineAction[]
 }
 
 export interface RiskPriority {
@@ -15,6 +28,8 @@ export interface RiskPriority {
   description: string
   tone: InsightTone
   badge: string
+  cta: string
+  target: RiskJumpTarget
 }
 
 export interface RiskSpotlight {
@@ -65,6 +80,13 @@ function buildHeadline(
       title: `系统当前处于${currentStateLabel}，应先处理人工接管`,
       description: `这不是“顺手看看暴露”就能结束的状态。优先确认 ${pendingRequests.length} 条人工动作和 ${breachedClusters.length} 个越限簇是否已被解释，再讨论是否恢复自动链路。`,
       tone: "danger",
+      actions: [
+        {
+          label: pendingRequests.length > 0 ? "去处理待审批请求" : "去提交人工动作",
+          target: pendingRequests.length > 0 ? "kill-switch-pending" : "kill-switch-form",
+        },
+        { label: "查看越限簇", target: "exposures" },
+      ],
     }
   }
 
@@ -73,6 +95,10 @@ function buildHeadline(
       title: "先处理待审批 kill-switch，再判断风险是否可控",
       description: `当前有 ${pendingRequests.length} 条人工风险动作挂起。它们不处理完，后面的暴露、阈值和状态历史都只是背景信息，不是最终结论。`,
       tone: "warning",
+      actions: [
+        { label: "去审批待处理请求", target: "kill-switch-pending" },
+        { label: "查看当前暴露", target: "exposures" },
+      ],
     }
   }
 
@@ -81,6 +107,10 @@ function buildHeadline(
       title: "当前最需要解释的是越限簇，而不是页面本身",
       description: `系统状态虽然还是 ${currentStateLabel}，但已经有 ${breachedClusters.length} 个簇越限。先核对暴露与限额，再决定是否需要提交新的人工动作。`,
       tone: "warning",
+      actions: [
+        { label: "查看越限簇", target: "exposures" },
+        { label: "提交人工动作", target: "kill-switch-form" },
+      ],
     }
   }
 
@@ -88,6 +118,10 @@ function buildHeadline(
     title: "当前风险链路相对稳定，可继续做例行观察",
     description: `当前状态为 ${currentStateLabel}，没有待审批 kill-switch，也没有暴露越限。此时更适合复核阈值覆盖与历史切换，而不是紧急人工接管。`,
     tone: "safe",
+    actions: [
+      { label: "查看阈值覆盖", target: "thresholds" },
+      { label: "回看状态历史", target: "history" },
+    ],
   }
 }
 
@@ -109,6 +143,8 @@ function buildPriorities(
       description: `待审批请求里最早的一条来自 ${pendingRequests[0].requested_by}，目标范围是 ${pendingRequests[0].target_scope}。在这些动作结论明确前，不建议继续把注意力分散到阈值调优。`,
       tone: pendingRequests.length > 1 ? "bad" : "warn",
       badge: `${pendingRequests.length} 条待审批`,
+      cta: "去审批",
+      target: "kill-switch-pending",
     })
   }
 
@@ -120,6 +156,8 @@ function buildPriorities(
       description: `当前最紧张的簇是 ${highest.cluster_code}，利用率 ${(highest.utilization_rate * 100).toFixed(1)}%，净暴露 ${highest.net_exposure.toFixed(4)}，上限 ${highest.limit_value.toFixed(2)}。`,
       tone: breachedClusters.length > 2 ? "bad" : "warn",
       badge: `${breachedClusters.length} 个簇越限`,
+      cta: "查看暴露",
+      target: "exposures",
     })
   } else if (exposures.length > 0) {
     const nearest = [...exposures].sort((left, right) => right.utilization_rate - left.utilization_rate)[0]
@@ -129,6 +167,8 @@ function buildPriorities(
       description: `当前最接近上限的是 ${nearest.cluster_code}，利用率 ${(nearest.utilization_rate * 100).toFixed(1)}%。如果它继续上升，下一步就该先看暴露而不是阈值表。`,
       tone: nearest.utilization_rate >= 0.7 ? "warn" : "info",
       badge: "离门槛最近",
+      cta: "查看暴露",
+      target: "exposures",
     })
   }
 
@@ -143,6 +183,8 @@ function buildPriorities(
       description: `系统并不完全依赖默认阈值。当前有 ${activeThresholds.length} 条覆盖项，示例包括 ${sample}。调整前应先确认问题来自真实风险，而不是人为放宽或收紧过。`,
       tone: activeThresholds.length > 2 ? "warn" : "info",
       badge: `${activeThresholds.length} 条覆盖`,
+      cta: "查看阈值",
+      target: "thresholds",
     })
   } else {
     cards.push({
@@ -151,6 +193,8 @@ function buildPriorities(
       description: "这意味着暴露异常更可能是链路真实状态，而不是某个临时阈值覆盖造成的显示偏差。",
       tone: "good",
       badge: "默认阈值",
+      cta: "查看阈值",
+      target: "thresholds",
     })
   }
 
@@ -161,6 +205,20 @@ function buildPriorities(
       description: `${formatDateTime(latestEvent.created_at)} 从 ${formatRiskStateLabel(latestEvent.from_state)} 切到 ${formatRiskStateLabel(latestEvent.to_state)}，${latestEvent.actor_id ? `操作人 ${latestEvent.actor_id}` : "由系统自动触发"}。`,
       tone: latestEvent.actor_id ? "info" : "warn",
       badge: latestEvent.actor_id ? "人工切换" : "自动切换",
+      cta: "查看历史",
+      target: "history",
+    })
+  }
+
+  if (cards.length === 0) {
+    cards.push({
+      id: "compute",
+      title: "先生成最新暴露快照",
+      description: "当前还没有足够的暴露和状态数据，先重算一轮，再决定是否需要人工动作。",
+      tone: "warn",
+      badge: "等待快照",
+      cta: "查看暴露区",
+      target: "exposures",
     })
   }
 

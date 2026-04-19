@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from services.tagging.contracts import TagRuleInput, TagRuleVersionCreateInput
 
-DEFAULT_RULE_VERSION_CODE = "tag_default_v1"
+DEFAULT_RULE_VERSION_CODE = "tag_default_v2"
 
 _CRYPTO_CATEGORY_VALUES = [
     "up or down",
@@ -33,6 +33,25 @@ _SPORTS_CATEGORY_VALUES = [
     "esports",
 ]
 
+_SPORTS_MARKET_PATTERNS = [
+    r"\b(?:o/u|over/under)\s+\d+(?:\.\d+)?\b",
+    r"^spread:\s",
+    r"^exact score:\s",
+    r"\bmap\s+\d+\s+winner\b",
+    r"\bgame\s+\d+\s+winner\b",
+    r"\bgames?\s+total\b",
+    r"\bmap handicap\b",
+    r"\bbo[1357]\b",
+    r"\b(?:valorant|counter-strike|mobile legends(?: bang bang)?|league of legends|dota 2|cs2):",
+    r"\bgame\s+\d+:\s+both teams destroy inhibitors\??\b",
+    r"\bgame\s+\d+:\s+odd/even total kills\??\b",
+    r"\bgame\s+\d+:\s+both teams slay baron nashor\??\b",
+    r"\bgame\s+\d+:\s+any player quadra kill\??\b",
+    r"\bgame\s+\d+:\s+any player penta kill\??\b",
+    r"\b(?:first blood|first tower|first dragon|first baron|total kills|total towers|dragon soul)\b",
+    r"(?s)\bwill .+ win on \d{4}-\d{2}-\d{2}\b.*(?:upcoming game|match statistics|first 90 minutes|regular play)",
+]
+
 _BLACKLIST_TOPIC_KEYWORDS = [
     "election",
     "president",
@@ -56,7 +75,7 @@ def _default_rules() -> list[TagRuleInput]:
             rule_name="Classify crypto price markets by category_raw",
             rule_kind="keyword",
             action_type="assign_primary_category",
-            target_tag_code="CAT_NUMERIC",
+            target_tag_code="CAT_CRYPTO_ASSET",
             priority=10,
             match_scope=["category_raw"],
             match_operator="equals_any",
@@ -69,7 +88,7 @@ def _default_rules() -> list[TagRuleInput]:
             rule_name="Classify crypto up/down markets by question text",
             rule_kind="keyword",
             action_type="assign_primary_category",
-            target_tag_code="CAT_NUMERIC",
+            target_tag_code="CAT_CRYPTO_ASSET",
             priority=20,
             match_scope=["question"],
             match_operator="contains_any",
@@ -162,6 +181,19 @@ def _default_rules() -> list[TagRuleInput]:
             effect_payload={"confidence": 0.97},
         ),
         TagRuleInput(
+            rule_code="SPORTS_CAT_BY_MARKET_SHAPE",
+            rule_name="Classify deterministic sports and esports market shapes",
+            rule_kind="regex",
+            action_type="assign_primary_category",
+            target_tag_code="CAT_SPORTS",
+            priority=115,
+            match_scope=["question", "description"],
+            match_operator="regex",
+            match_payload={"patterns": _SPORTS_MARKET_PATTERNS},
+            effect_payload={"confidence": 0.94},
+            notes="Covers common match-up, spread, totals, exact score, and map/game winner markets.",
+        ),
+        TagRuleInput(
             rule_code="SPORTS_BLACK_RULE",
             rule_name="Block sports and esports markets by default",
             rule_kind="keyword",
@@ -174,6 +206,19 @@ def _default_rules() -> list[TagRuleInput]:
             effect_payload={"confidence": 0.97},
         ),
         TagRuleInput(
+            rule_code="SPORTS_BLACK_BY_MARKET_SHAPE",
+            rule_name="Block deterministic sports and esports market shapes by default",
+            rule_kind="regex",
+            action_type="set_admission_bucket",
+            target_tag_code="LIST_BLACK",
+            priority=125,
+            match_scope=["question", "description"],
+            match_operator="regex",
+            match_payload={"patterns": _SPORTS_MARKET_PATTERNS},
+            effect_payload={"confidence": 0.95},
+            notes="Keeps sports/esports markets out of the novice flow without requiring manual approval clicks.",
+        ),
+        TagRuleInput(
             rule_code="SPORTS_MANUAL_RULE",
             rule_name="Flag sports and esports markets as manual-interpretation heavy",
             rule_kind="keyword",
@@ -183,6 +228,18 @@ def _default_rules() -> list[TagRuleInput]:
             match_scope=["category_raw"],
             match_operator="equals_any",
             match_payload={"keywords": _SPORTS_CATEGORY_VALUES},
+            effect_payload={"confidence": 0.84},
+        ),
+        TagRuleInput(
+            rule_code="SPORTS_MANUAL_BY_MARKET_SHAPE",
+            rule_name="Flag deterministic sports and esports market shapes as manual-interpretation heavy",
+            rule_kind="regex",
+            action_type="add_risk_factor",
+            target_tag_code="RF_MANUAL_INTERPRETATION_REQUIRED",
+            priority=135,
+            match_scope=["question", "description"],
+            match_operator="regex",
+            match_payload={"patterns": _SPORTS_MARKET_PATTERNS},
             effect_payload={"confidence": 0.84},
         ),
         TagRuleInput(
@@ -220,7 +277,7 @@ def build_default_rule_version_create_input(
         version_code=version_code,
         change_reason="Seed baseline tagging rules for repeatable local setup.",
         evidence_summary="Derived from docs/tagging guidance and current development-market shapes.",
-        impact_summary="Auto-tags crypto up/down markets while blocking sports/esports and high-dispute topics.",
+        impact_summary="Auto-tags crypto asset price markets and auto-blocks common sports/esports market shapes to reduce manual review load.",
         rollback_plan="Activate a prior tag_rule_version or publish a rollback version if these defaults regress.",
         version_notes="Default baseline rules for development bootstrap and early M3 validation.",
         rules=_default_rules(),
