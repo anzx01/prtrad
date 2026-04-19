@@ -3,6 +3,9 @@ node_modules/
 dist/
 build/
 .turbo/
+.tmp/
+.tmp_ref_images/
+*.tsbuildinfo
 
 .venv/
 __pycache__/
@@ -15,6 +18,8 @@ __pycache__/
 
 coverage/
 *.log
+logs/**
+!logs/.gitkeep
 *.sqlite3
 *.db
 

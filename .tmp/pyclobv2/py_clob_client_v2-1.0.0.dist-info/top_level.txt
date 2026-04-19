@@ -1,2 +1,0 @@
-examples
-py_clob_client_v2
