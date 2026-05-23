@@ -1,6 +1,6 @@
 # GitHub 发布合规审查
 
-审查日期：2026-05-23（最后更新：2026-05-23）
+审查日期：2026-05-23（最后更新：2026-05-23 第二轮补齐）
 
 本文是面向公开 GitHub 仓库发布前的工程合规清单，不构成法律意见。若后续要商业化分发、接入真实资金或发布二进制产物，应再做正式法律审查。
 
@@ -10,9 +10,10 @@
 - `.env` 未被 Git 跟踪，历史中也未发现 `.env` 提交记录。
 - `.claude/` 属于本地助手配置，已加入 `.gitignore`，已确认从 Git 跟踪中移除。历史提交中的 `.claude/settings*.json` 内容经核查仅含 Claude Code 允许命令列表，无密钥或私人路径，风险可接受。
 - `SESSION_STATUS.json` 已从 Git 跟踪中移除，并加入 `.gitignore`。
-- 项目尚未选择开源许可证，当前按 `UNLICENSED` 处理：源码可见不等于授予使用权。
+- **已选择 MIT 开源许可证**，根目录 `LICENSE` 文件、`package.json` 与 `apps/web/package.json` 的 `license` 字段均同步为 `MIT`，版权归属署名 `anzx01`。
 - 依赖中存在 LGPL 与 CC-BY-4.0 条目，已在第三方依赖授权清单中记录。
-- `image/` 目录当前为本项目界面截图，未发现外部素材复用；仍建议保留素材来源说明。
+- `image/` 目录三张截图人工审查通过：仅含 UI、系统生成 UUID、内部时间戳，无钱包地址、无真实人名、无本机路径、无外部素材复用。
+- **已补齐**：`DISCLAIMER.md`（实盘资金风险免责）、`CONTRIBUTING.md`（贡献流程 + DCO 签名要求）、`docs/compliance/data-usage-policy.md`（Polymarket API 数据使用边界）、`scripts/refresh-licenses.sh`（依赖授权清单刷新脚本）。
 
 ## 已执行检查
 
@@ -25,10 +26,11 @@
 
 ## 需要发布前确认
 
-- 是否要真正开源：若要允许他人使用或贡献，应由项目所有者选择并添加明确许可证；若不授权他人使用，保持 `UNLICENSED`。
+- 开源许可证已选定：MIT。`LICENSE` 文件 Copyright 行填写的是 `anzx01`；若版权应归属其他个人或机构，需在公开前修改。
 - 远端历史已复核：`.claude/settings*.json` 历史内容经核查仅含 Claude Code 命令权限列表，无密钥或私人路径，风险可接受。未发现 `.env` 历史提交。若追求最干净的历史，可考虑压缩为新的初始提交。
 - `py_clob_client_v2==1.0.0` 已在 `third-party-notices.md` 中补充说明：Polymarket 官方 SDK 采用 MIT 许可证，本项目测试中仅 mock 该包，不含其源代码，已记录为运行时依赖。
 - 如果发布 Docker 镜像、桌面包、二进制包或托管服务，应补齐完整第三方许可证文本、归属声明和运行时依赖清单。
+- 依赖授权清单建议定期刷新：运行 `bash scripts/refresh-licenses.sh`，输出落到 `var/license-reports/`，人工据此更新 `third-party-notices.md`。
 
 ## 参考
 

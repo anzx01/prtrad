@@ -1,7 +1,18 @@
 {
   "name": "polymarket-tail-risk",
+  "version": "0.1.0",
+  "description": "Polymarket tail risk monitoring and management console (research project, non-official).",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "author": "anzx01",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anzx01/prtrad.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anzx01/prtrad/issues"
+  },
+  "homepage": "https://github.com/anzx01/prtrad#readme",
   "workspaces": [
     "apps/web"
   ],

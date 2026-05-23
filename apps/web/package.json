@@ -1,7 +1,8 @@
 {
   "name": "@ptr/web",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "author": "anzx01",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

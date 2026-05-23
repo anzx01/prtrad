@@ -1,6 +1,10 @@
 # Polymarket Tail Risk Console
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 用于研究、准入、风控、回测、影子验证与交易开关控制的单页控制台。
+
+> ⚠️ **重要免责声明**：本项目是**个人研究性**开源工具，**不是** Polymarket 官方项目；不构成投资、法律、税务或财务建议；包含实盘交易能力但默认关闭，启用后由使用者自行承担一切资金风险。完整条款见 [DISCLAIMER.md](DISCLAIMER.md)。
 
 ## 当前默认入口
 
@@ -263,16 +267,23 @@ npm run task:trading -- -Action orders
 - 开发进度：[docs/dev-progress.md](docs/dev-progress.md)
 - 环境变量：[docs/environment-variables.md](docs/environment-variables.md)
 - Tagging 默认基线：[docs/tagging/default-bootstrap-v1.md](docs/tagging/default-bootstrap-v1.md)
+- 风险免责声明：[DISCLAIMER.md](DISCLAIMER.md)
+- 贡献指南（含 DCO 要求）：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全漏洞报告：[SECURITY.md](SECURITY.md)
+- 许可证：[LICENSE](LICENSE)（MIT）
 - GitHub 发布合规审查：[docs/compliance/github-publication-review.md](docs/compliance/github-publication-review.md)
 - 第三方依赖授权清单：[docs/compliance/third-party-notices.md](docs/compliance/third-party-notices.md)
 - 素材来源说明：[docs/compliance/asset-attribution.md](docs/compliance/asset-attribution.md)
+- 数据使用政策：[docs/compliance/data-usage-policy.md](docs/compliance/data-usage-policy.md)
 
 ## 合规与授权提示
 
-- 当前尚未选择开源许可证，`package.json` 明确标记为 `UNLICENSED`；公开到 GitHub 仅表示源码可见，不等于授权他人复制、修改或商用。
-- 本项目不是 Polymarket 官方项目，也不代表 Polymarket；仓库内的 Polymarket 名称仅用于说明数据源和接口集成对象。
-- 本项目包含实盘交易能力，但默认关闭；文档和代码不构成投资、法律、税务或财务建议。
+- 本项目采用 **MIT 协议**（见 [LICENSE](LICENSE)）。允许自由使用、修改、再分发，需保留版权与许可证声明。
+- 本项目**不是** Polymarket 官方项目，也不代表 Polymarket；仓库内的 Polymarket 名称仅用于说明数据源和接口集成对象。
+- 本项目包含实盘交易能力，但默认关闭；文档和代码**不构成投资、法律、税务或财务建议**。完整免责声明见 [DISCLAIMER.md](DISCLAIMER.md)。
+- 调用 Polymarket 公共 API 时需自行遵守其服务条款和地域限制（含美国用户禁止访问等），详见 [docs/compliance/data-usage-policy.md](docs/compliance/data-usage-policy.md)。
 - `.env`、本地数据库、日志、虚拟环境、构建产物和本地助手配置均不应提交到公开仓库。
+- 提交 PR 请按 [CONTRIBUTING.md](CONTRIBUTING.md) 使用 `git commit -s` 签名（DCO）。
 
 ## 协作约定
 

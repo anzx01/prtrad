@@ -28,6 +28,7 @@ var/**
 !var/.gitkeep
 !var/celery/.gitkeep
 !var/data/.gitkeep
+!var/license-reports/.gitkeep
 
 SESSION_STATUS.json
 SESSION_STATUS.md
