@@ -64,7 +64,7 @@
 | `httpx` | `0.28.1` | BSD-3-Clause |
 | `celery` | `5.5.3` | BSD-3-Clause |
 
-待确认：
+Polymarket SDK 说明：
 
-- `py_clob_client_v2==1.0.0` 未在当前本地虚拟环境 metadata 中发现，正式公开或分发前需要确认许可证。
+- `py_clob_client_v2==1.0.0`：Polymarket 官方 CLOB 交易客户端 SDK 的本地构建版本。Polymarket 的官方开源仓库（`py-clob-client`）采用 MIT 许可证；若使用的是该仓库的派生版本，请以实际 README / LICENSE 文件为准。本项目测试中仅对该包进行了 mock，不包含其源代码，仅通过 `requirements.txt` 声明运行时依赖。
 

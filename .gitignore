@@ -28,3 +28,6 @@ var/**
 !var/.gitkeep
 !var/celery/.gitkeep
 !var/data/.gitkeep
+
+SESSION_STATUS.json
+SESSION_STATUS.md
