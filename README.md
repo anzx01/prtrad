@@ -263,6 +263,16 @@ npm run task:trading -- -Action orders
 - 开发进度：[docs/dev-progress.md](docs/dev-progress.md)
 - 环境变量：[docs/environment-variables.md](docs/environment-variables.md)
 - Tagging 默认基线：[docs/tagging/default-bootstrap-v1.md](docs/tagging/default-bootstrap-v1.md)
+- GitHub 发布合规审查：[docs/compliance/github-publication-review.md](docs/compliance/github-publication-review.md)
+- 第三方依赖授权清单：[docs/compliance/third-party-notices.md](docs/compliance/third-party-notices.md)
+- 素材来源说明：[docs/compliance/asset-attribution.md](docs/compliance/asset-attribution.md)
+
+## 合规与授权提示
+
+- 当前尚未选择开源许可证，`package.json` 明确标记为 `UNLICENSED`；公开到 GitHub 仅表示源码可见，不等于授权他人复制、修改或商用。
+- 本项目不是 Polymarket 官方项目，也不代表 Polymarket；仓库内的 Polymarket 名称仅用于说明数据源和接口集成对象。
+- 本项目包含实盘交易能力，但默认关闭；文档和代码不构成投资、法律、税务或财务建议。
+- `.env`、本地数据库、日志、虚拟环境、构建产物和本地助手配置均不应提交到公开仓库。
 
 ## 协作约定
 

@@ -1,4 +1,4 @@
-﻿"""Integration tests for M3 NetEV API."""
+"""Integration tests for M3 NetEV API."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid

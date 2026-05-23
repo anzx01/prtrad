@@ -1,6 +1,7 @@
 {
   "name": "polymarket-tail-risk",
   "private": true,
+  "license": "UNLICENSED",
   "workspaces": [
     "apps/web"
   ],

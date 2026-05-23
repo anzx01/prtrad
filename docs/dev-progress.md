@@ -1,5 +1,38 @@
 # 开发进度
 
+## 2026-05-23
+### GitHub 公开发布前合规清理
+
+- 完成一轮面向公开 GitHub 仓库的合规与版权审查：
+  - 确认 `.env` 未被 Git 跟踪，历史中也未发现 `.env` 提交记录。
+  - 使用 `detect-secrets` 扫描 Git 跟踪文件，仅发现 Alembic `down_revision` 版本号误报。
+  - 梳理 JavaScript 与 Python 直接依赖许可证，记录 LGPL、CC-BY-4.0 等需要发布前留意的条目。
+  - 人工查看 `image/` 目录，当前图片均为本项目界面截图。
+- 自动完成的仓库清理：
+  - 将 `.claude/` 加入 `.gitignore`，并从 Git 跟踪中移除本地助手配置。
+  - 新增 `.gitattributes`，统一文本与二进制文件的 Git 处理方式。
+  - 移除一批文本文件的 UTF-8 BOM。
+  - 在 `package.json` 与 `apps/web/package.json` 中明确 `license: "UNLICENSED"`。
+  - 在 `.env.example` 中补齐实盘交易相关环境变量空模板，避免使用者误把真实密钥写进示例文件。
+  - 在 README 中补充授权状态、第三方商标/接口关系、非投资建议和敏感文件提交边界。
+- 新增合规文档：
+  - `docs/compliance/github-publication-review.md`
+  - `docs/compliance/third-party-notices.md`
+  - `docs/compliance/asset-attribution.md`
+
+### 验证结果
+
+- `npm install --package-lock-only --ignore-scripts` -> `up to date`
+- `detect-secrets` 扫描 Git 跟踪文件 -> 仅 Alembic 版本号误报
+- `detect-secrets` 扫描 `docs/compliance` -> 无发现
+- UTF-8 / BOM 检查 -> 当前 Git 跟踪文本文件未发现 BOM 或非 UTF-8
+
+### 剩余风险
+
+- 项目是否真正开源仍需所有者选择许可证；当前按未授权开源处理。
+- `.claude/settings*.json` 曾存在于 Git 历史中，若要公开完整历史，建议先压缩为新的初始提交或单独做历史清理。
+- `py_clob_client_v2==1.0.0` 当前未在本地虚拟环境 metadata 中发现许可证信息，正式公开或分发前需要单独确认。
+
 ## 2026-04-19
 ### 补充记录（前端默认端口改为 3001）
 

@@ -3,6 +3,7 @@ node_modules/
 dist/
 build/
 .turbo/
+.claude/
 .tmp/
 .tmp_ref_images/
 *.tsbuildinfo

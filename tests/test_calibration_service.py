@@ -1,4 +1,4 @@
-﻿"""Unit tests for M3 calibration service."""
+"""Unit tests for M3 calibration service."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid

@@ -1,4 +1,4 @@
-﻿"""Unit tests for M4 risk services."""
+"""Unit tests for M4 risk services."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
