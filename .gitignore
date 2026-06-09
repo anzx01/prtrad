@@ -3,6 +3,10 @@ node_modules/
 dist/
 build/
 .turbo/
+.claude/
+.tmp/
+.tmp_ref_images/
+*.tsbuildinfo
 
 .venv/
 __pycache__/
@@ -15,6 +19,8 @@ __pycache__/
 
 coverage/
 *.log
+logs/**
+!logs/.gitkeep
 *.sqlite3
 *.db
 
@@ -22,3 +28,7 @@ var/**
 !var/.gitkeep
 !var/celery/.gitkeep
 !var/data/.gitkeep
+!var/license-reports/.gitkeep
+
+SESSION_STATUS.json
+SESSION_STATUS.md

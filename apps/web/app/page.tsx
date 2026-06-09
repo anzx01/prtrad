@@ -1,5 +1,5 @@
-import { SmartConsolePage } from "./home/smart-console"
+import { SimpleConsolePage } from "./home/simple-console"
 
 export default function HomePage() {
-  return <SmartConsolePage />
+  return <SimpleConsolePage />
 }

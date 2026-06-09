@@ -6,6 +6,7 @@ import { apiGet, apiPost } from "@/lib/api"
 import { PageIntro } from "../components/page-intro"
 
 import {
+  buildSuggestedKillSwitchReason,
   DEFAULT_THRESHOLD_VALUES,
   formatRiskStateLabel,
   formatThresholdMetricLabel,
@@ -13,7 +14,7 @@ import {
   INITIAL_KILL_SWITCH_FORM,
   INITIAL_THRESHOLD_FORM,
 } from "./constants"
-import { buildRiskInsights } from "./insights"
+import { buildRiskInsights, type RiskJumpTarget } from "./insights"
 import {
   RiskPageHeader,
   RiskPrioritySection,
@@ -35,6 +36,7 @@ import type {
   ExposureItem,
   KillSwitchFormState,
   KillSwitchItem,
+  KillSwitchReviewDraft,
   ReviewAction,
   RiskStateData,
   ThresholdFormState,
@@ -53,6 +55,9 @@ export default function RiskPage() {
   const [savingThreshold, setSavingThreshold] = useState(false)
   const [deactivatingThresholdId, setDeactivatingThresholdId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [reviewDraft, setReviewDraft] = useState<KillSwitchReviewDraft | null>(null)
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
   const [killSwitchForm, setKillSwitchForm] = useState<KillSwitchFormState>(INITIAL_KILL_SWITCH_FORM)
   const [thresholdForm, setThresholdForm] = useState<ThresholdFormState>(INITIAL_THRESHOLD_FORM)
@@ -82,6 +87,10 @@ export default function RiskPage() {
     void fetchAll()
   }, [])
 
+  const jumpTo = (target: RiskJumpTarget) => {
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
   const updateKillSwitchForm = (patch: Partial<KillSwitchFormState>) => {
     setKillSwitchForm((current) => ({ ...current, ...patch }))
   }
@@ -93,8 +102,10 @@ export default function RiskPage() {
   const handleCompute = async () => {
     setComputing(true)
     setError(null)
+    setNotice(null)
     try {
       await apiPost("/risk/exposures/compute")
+      setNotice("最新暴露快照已重算，页面数据已刷新。")
       await fetchAll()
     } catch (computeError) {
       setError(getRiskErrorMessage(computeError))
@@ -106,14 +117,17 @@ export default function RiskPage() {
   const handleKillSwitchSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!killSwitchForm.requested_by || !killSwitchForm.reason) {
+      setError("请先填写申请人和原因")
       return
     }
 
     setSubmitting(true)
     setError(null)
+    setNotice(null)
     try {
       await apiPost("/risk/kill-switch", killSwitchForm)
       setKillSwitchForm(INITIAL_KILL_SWITCH_FORM)
+      setNotice("人工风险动作已提交，待审批区已刷新。")
       await fetchAll()
     } catch (submitError) {
       setError(getRiskErrorMessage(submitError))
@@ -122,19 +136,39 @@ export default function RiskPage() {
     }
   }
 
-  const handleReview = async (id: string, action: ReviewAction) => {
-    const reviewer = window.prompt("审批人 ID")
-    if (!reviewer) {
+  const handleReviewStart = (request: KillSwitchItem, action: ReviewAction) => {
+    setReviewDraft({
+      requestId: request.id,
+      action,
+      reviewer: request.reviewed_by ?? "",
+      notes: request.review_notes ?? "",
+    })
+    setError(null)
+    setNotice(null)
+  }
+
+  const handleReviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!reviewDraft?.reviewer.trim()) {
+      setError("请先填写审批人 ID")
       return
     }
-    const notes = window.prompt("可选备注") ?? ""
 
+    setReviewSubmitting(true)
     setError(null)
+    setNotice(null)
     try {
-      await apiPost(`/risk/kill-switch/${id}/${action}`, { reviewer, notes })
+      await apiPost(`/risk/kill-switch/${reviewDraft.requestId}/${reviewDraft.action}`, {
+        reviewer: reviewDraft.reviewer.trim(),
+        notes: reviewDraft.notes.trim() || null,
+      })
+      setNotice(reviewDraft.action === "approve" ? "风险动作已批准。" : "风险动作已拒绝。")
+      setReviewDraft(null)
       await fetchAll()
     } catch (reviewError) {
       setError(getRiskErrorMessage(reviewError))
+    } finally {
+      setReviewSubmitting(false)
     }
   }
 
@@ -161,6 +195,7 @@ export default function RiskPage() {
 
     setSavingThreshold(true)
     setError(null)
+    setNotice(null)
     try {
       await apiPost("/risk/thresholds", {
         cluster_code: thresholdForm.cluster_code.trim(),
@@ -173,6 +208,7 @@ export default function RiskPage() {
         created_by: "",
         threshold_value: DEFAULT_THRESHOLD_VALUES[current.metric_name],
       }))
+      setNotice("阈值覆盖已保存。")
       await fetchAll()
     } catch (submitError) {
       setError(getRiskErrorMessage(submitError))
@@ -191,8 +227,10 @@ export default function RiskPage() {
 
     setDeactivatingThresholdId(threshold.id)
     setError(null)
+    setNotice(null)
     try {
       await apiPost(`/risk/thresholds/${threshold.id}/deactivate`)
+      setNotice("阈值覆盖已停用，系统已恢复默认阈值。")
       await fetchAll()
     } catch (deactivateError) {
       setError(getRiskErrorMessage(deactivateError))
@@ -212,6 +250,11 @@ export default function RiskPage() {
   const breachedClusters = exposures.filter((exposure) => exposure.is_breached)
   const pendingCount = pendingRequests.length
   const breachedCount = breachedClusters.length
+  const suggestedKillSwitchReason = buildSuggestedKillSwitchReason({
+    requestType: killSwitchForm.request_type,
+    currentState,
+    breachedClusters: breachedClusters.map((item) => item.cluster_code),
+  })
   const insights = buildRiskInsights({
     riskState,
     exposures,
@@ -232,7 +275,7 @@ export default function RiskPage() {
         guides={[
           {
             title: "先看什么",
-            description: "先看当前状态和越限簇数，再看是否有待审批 kill-switch，最后再调阈值和回看历史。",
+            description: "先看系统当前判断，再按按钮跳到待审批请求、越限簇或阈值覆盖，不要自己在页面里来回找。",
           },
           {
             title: "什么时候要动作",
@@ -248,6 +291,8 @@ export default function RiskPage() {
       <RiskPageHeader
         computing={computing}
         onCompute={handleCompute}
+        actions={insights.headline.actions}
+        onJump={jumpTo}
         title={insights.headline.title}
         summary={insights.headline.description}
         tone={insights.headline.tone}
@@ -258,6 +303,11 @@ export default function RiskPage() {
           {error}
         </div>
       )}
+      {notice && (
+        <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          {notice}
+        </div>
+      )}
 
       <RiskSummaryGrid
         currentState={currentState}
@@ -266,32 +316,49 @@ export default function RiskPage() {
         pendingCount={pendingCount}
       />
 
-      <RiskPrioritySection priorities={insights.priorities} spotlight={insights.spotlight} />
+      <RiskPrioritySection priorities={insights.priorities} spotlight={insights.spotlight} onJump={jumpTo} />
 
-      <RiskStatePanel currentState={currentState} latestEvent={riskState?.history[0]} />
+      <section id="state">
+        <RiskStatePanel currentState={currentState} latestEvent={riskState?.history[0]} />
+      </section>
 
-      <ExposuresSection exposures={exposures} />
+      <section id="exposures">
+        <ExposuresSection exposures={exposures} />
+      </section>
 
-      <ThresholdsSection
-        thresholdForm={thresholdForm}
-        savingThreshold={savingThreshold}
-        thresholds={thresholds}
-        deactivatingThresholdId={deactivatingThresholdId}
-        onSubmit={handleThresholdSubmit}
-        onFormChange={updateThresholdForm}
-        onMetricChange={handleThresholdMetricChange}
-        onDeactivate={handleDeactivateThreshold}
-      />
+      <section id="thresholds">
+        <ThresholdsSection
+          thresholdForm={thresholdForm}
+          savingThreshold={savingThreshold}
+          thresholds={thresholds}
+          deactivatingThresholdId={deactivatingThresholdId}
+          onSubmit={handleThresholdSubmit}
+          onFormChange={updateThresholdForm}
+          onMetricChange={handleThresholdMetricChange}
+          onDeactivate={handleDeactivateThreshold}
+        />
+      </section>
 
-      <StateHistorySection history={riskState?.history ?? []} />
+      <section id="history">
+        <StateHistorySection history={riskState?.history ?? []} />
+      </section>
 
       <KillSwitchSection
         killSwitchForm={killSwitchForm}
+        suggestedReason={suggestedKillSwitchReason}
         pendingRequests={pendingRequests}
         submitting={submitting}
+        reviewDraft={reviewDraft}
+        reviewSubmitting={reviewSubmitting}
         onSubmit={handleKillSwitchSubmit}
         onFormChange={updateKillSwitchForm}
-        onReview={handleReview}
+        onUseSuggestedReason={() => updateKillSwitchForm({ reason: suggestedKillSwitchReason })}
+        onReviewStart={handleReviewStart}
+        onReviewDraftChange={(patch) =>
+          setReviewDraft((current) => (current ? { ...current, ...patch } : current))
+        }
+        onReviewSubmit={handleReviewSubmit}
+        onReviewCancel={() => setReviewDraft(null)}
       />
 
       <ReviewHistorySection requests={reviewedRequests} />

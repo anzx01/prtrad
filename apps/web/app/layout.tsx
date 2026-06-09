@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
+
 import "./globals.css"
 import { ConsoleNav } from "./components/console-nav"
 
 export const metadata: Metadata = {
-  title: "PRT 风控控制台",
-  description: "用于研究、准入、风控、回测、影子运行与上线评审的控制台。",
+  title: "PRT 单页控制台",
+  description: "面向小白的单页自动化 Polymarket 风控控制台。",
   other: {
     google: "notranslate",
   },
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
     shortcut: "/favicon.svg",
     apple: "/favicon.svg",
   },
-};
+}
 
 export default function RootLayout({
   children,
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" translate="no" className="notranslate" suppressHydrationWarning>
       <body
-        className="notranslate min-h-screen bg-[#0d1117] text-[#e6edf3]"
+        className="notranslate min-h-screen"
         translate="no"
         suppressHydrationWarning
       >

@@ -47,9 +47,9 @@ export default function ApiStatus({ compact = false }: { compact?: boolean }) {
   }, [])
 
   const dot: Record<Status, string> = {
-    checking: "bg-yellow-400 animate-pulse",
-    connected: "bg-green-400",
-    disconnected: "bg-red-500 animate-pulse",
+    checking: "bg-[color:var(--oa-gold)] animate-pulse",
+    connected: "bg-[color:var(--oa-green)]",
+    disconnected: "bg-[color:var(--oa-red)] animate-pulse",
   }
 
   const label: Record<Status, string> = {
@@ -60,16 +60,16 @@ export default function ApiStatus({ compact = false }: { compact?: boolean }) {
 
   return (
     <div
-      className={`flex items-center gap-2 border border-[#30363d] bg-[#0d1117] text-[#8b949e] ${
-        compact ? "rounded-md px-2.5 py-1.5 text-[12px]" : "rounded-full px-3 py-1.5 text-xs"
+      className={`flex items-center gap-2 border border-[color:var(--oa-border)] bg-[rgba(255,251,246,0.78)] text-[color:var(--oa-muted)] shadow-[0_12px_28px_rgba(52,34,20,0.06)] ${
+        compact ? "rounded-full px-3 py-2 text-[12px]" : "rounded-full px-4 py-2 text-xs"
       }`}
     >
-      <span className={`inline-block h-2 w-2 rounded-full ${dot[status]}`} />
+      <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot[status]}`} />
       <span className="truncate">{label[status]}</span>
       <button
         type="button"
         onClick={() => void check()}
-        className="ml-auto inline-flex h-5 w-5 items-center justify-center text-[#8b949e]/60 transition-colors hover:text-[#e6edf3]"
+        className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-full text-[color:rgba(29,24,20,0.5)] transition-colors hover:bg-[rgba(181,72,47,0.08)] hover:text-[color:var(--oa-text)]"
         title="刷新 API 状态"
         aria-label="刷新 API 状态"
         suppressHydrationWarning

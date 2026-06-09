@@ -15,6 +15,8 @@ export function LaunchActionForms({
   shadowForm,
   reviewForm,
   shadowRuns,
+  suggestedShadowRunName,
+  suggestedReviewTitle,
   runningShadow,
   creatingReview,
   onShadowFormChange,
@@ -30,6 +32,8 @@ export function LaunchActionForms({
     shadow_run_id: string
   }
   shadowRuns: ShadowRun[]
+  suggestedShadowRunName: string
+  suggestedReviewTitle: string
   runningShadow: boolean
   creatingReview: boolean
   onShadowFormChange: (patch: Partial<{ run_name: string; executed_by: string }>) => void
@@ -53,14 +57,14 @@ export function LaunchActionForms({
           description="先用 shadow run 确认当前风险状态和核心检查项，再决定是否进入正式评审。"
         >
           <form className="space-y-4" onSubmit={onRunShadow}>
-            <ConsoleField label="运行名称">
+            <ConsoleField label="运行名称" hint={`可留空，系统会自动命名为 ${suggestedShadowRunName}`}>
               <ConsoleInput
                 value={shadowForm.run_name}
                 onChange={(event) => onShadowFormChange({ run_name: event.target.value })}
-                placeholder="shadow-20260413"
+                placeholder={suggestedShadowRunName}
               />
             </ConsoleField>
-            <ConsoleField label="执行人">
+            <ConsoleField label="执行人" hint="可选；留空时会记为系统执行。">
               <ConsoleInput
                 value={shadowForm.executed_by}
                 onChange={(event) => onShadowFormChange({ executed_by: event.target.value })}
@@ -78,14 +82,14 @@ export function LaunchActionForms({
         <ConsolePanel
           className="bg-[#0d1117]"
           title="创建上线评审"
-          description="把当前阶段、申请人和关联的 shadow run 固定下来，形成一条可追溯的 Go/NoGo 决策记录。"
+          description="这里尽量只保留必须确认的字段。评审标题可留空自动生成；如不指定 shadow，也会默认挂到最近一次。"
         >
           <form className="space-y-4" onSubmit={onCreateReview}>
-            <ConsoleField label="评审标题">
+            <ConsoleField label="评审标题" hint={`可留空，系统会自动命名为 ${suggestedReviewTitle}`}>
               <ConsoleInput
                 value={reviewForm.title}
                 onChange={(event) => onReviewFormChange({ title: event.target.value })}
-                placeholder="M6 上线准备评审"
+                placeholder={suggestedReviewTitle}
               />
             </ConsoleField>
             <div className="grid gap-4 md:grid-cols-2">
@@ -103,11 +107,11 @@ export function LaunchActionForms({
                   ))}
                 </ConsoleSelect>
               </ConsoleField>
-              <ConsoleField label="申请人">
+              <ConsoleField label="申请人" hint="建议填写；如留空，会优先复用上面的执行人。">
                 <ConsoleInput
                   value={reviewForm.requested_by}
                   onChange={(event) => onReviewFormChange({ requested_by: event.target.value })}
-                  required
+                  placeholder="可留空时复用上面的执行人"
                 />
               </ConsoleField>
             </div>

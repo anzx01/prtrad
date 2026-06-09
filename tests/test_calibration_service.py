@@ -1,4 +1,4 @@
-﻿"""Unit tests for M3 calibration service."""
+"""Unit tests for M3 calibration service."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import uuid
@@ -129,6 +129,28 @@ def test_compute_calibration_marks_unit_inactive_when_samples_are_missing(test_d
     assert unit.sample_count == 0
     assert unit.is_active is False
     assert unit.disabled_reason == "no_historical_samples"
+
+    session.close()
+
+
+def test_recompute_all_handles_large_resolved_market_batches(test_db):
+    session = test_db()
+    service = CalibrationService(session)
+
+    sample_count = 1005
+    for index in range(1, sample_count + 1):
+        market, snapshot = _resolved_market(index, outcome="yes", midpoint="0.74")
+        session.add(market)
+        session.add(snapshot)
+    session.commit()
+
+    units = service.recompute_all(window_type="long")
+
+    assert len(units) == 1
+    assert units[0].sample_count == sample_count
+    assert units[0].is_active is True
+    assert units[0].disabled_reason is None
+    assert round(float(units[0].edge_estimate), 4) == 0.26
 
     session.close()
 

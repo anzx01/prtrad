@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from db.session import get_db
@@ -37,6 +37,12 @@ class NetEVCandidateSchema(BaseModel):
     rejection_reason_description: str | None = None
     scoring_recommendation: str | None = None
     dq_status: str | None = None
+    dq_checked_at: datetime | None = None
+    dq_blocking_reason_codes: list[str] = Field(default_factory=list)
+    dq_warning_reason_codes: list[str] = Field(default_factory=list)
+    dq_primary_reason_code: str | None = None
+    dq_primary_reason_name: str | None = None
+    dq_primary_reason_description: str | None = None
     rule_version: str
     evaluated_at: datetime
 

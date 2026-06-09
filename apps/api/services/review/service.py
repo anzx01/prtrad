@@ -50,6 +50,13 @@ def review_statuses_for_filter(status: str | None) -> tuple[str, ...] | None:
     return (normalized,)
 
 
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 class ReviewService:
     """Core review task workflow service."""
 
@@ -258,6 +265,7 @@ class ReviewService:
         approval_notes: str | None = None,
     ) -> MarketReviewTask:
         review_task = self._get_review_task_or_error(review_task_id)
+        self._ensure_review_task_can_be_approved(review_task)
         current_status = self._prepare_review_for_decision(review_task, actor_id)
         if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
@@ -293,10 +301,17 @@ class ReviewService:
         self,
         review_task_id: UUID,
         actor_id: str,
-        rejection_reason: str,
+        rejection_reason: str | None = None,
         rejection_notes: str | None = None,
     ) -> MarketReviewTask:
         review_task = self._get_review_task_or_error(review_task_id)
+        provided_rejection_reason = _normalize_optional_text(rejection_reason)
+        effective_rejection_reason = (
+            provided_rejection_reason or self._default_rejection_reason(review_task)
+        )
+        if effective_rejection_reason is None:
+            raise ValueError("rejection_reason is required when rejecting approvable tasks")
+
         current_status = self._prepare_review_for_decision(review_task, actor_id)
         if current_status != REVIEW_STATUS_IN_PROGRESS:
             raise ValueError(
@@ -310,7 +325,8 @@ class ReviewService:
             **(review_task.review_payload or {}),
             "rejected_by": actor_id,
             "rejected_at": str(review_task.resolved_at),
-            "rejection_reason": rejection_reason,
+            "rejection_reason": effective_rejection_reason,
+            "rejection_reason_auto_filled": provided_rejection_reason is None,
             "rejection_notes": rejection_notes,
         }
 
@@ -323,7 +339,8 @@ class ReviewService:
             payload={
                 "actor_id": actor_id,
                 "market_ref_id": str(review_task.market_ref_id),
-                "rejection_reason": rejection_reason,
+                "rejection_reason": effective_rejection_reason,
+                "rejection_reason_auto_filled": provided_rejection_reason is None,
                 "rejection_notes": rejection_notes,
             },
         )
@@ -342,8 +359,26 @@ class ReviewService:
             raise ValueError("review_task_ids cannot be empty")
         if action not in {"start_review", "approve", "reject"}:
             raise ValueError("action must be one of start_review, approve, reject")
-        if action == "reject" and not rejection_reason:
-            raise ValueError("rejection_reason is required when action=reject")
+        normalized_rejection_reason = _normalize_optional_text(rejection_reason)
+        if action == "reject" and normalized_rejection_reason is None:
+            missing_reason_ids: list[str] = []
+            for review_task_id in review_task_ids:
+                review_task = self._get_review_task_or_error(review_task_id)
+                if self._default_rejection_reason(review_task) is not None:
+                    continue
+                missing_reason_ids.append(str(review_task.id))
+            if missing_reason_ids:
+                raise ValueError(self._bulk_rejection_reason_required_message(missing_reason_ids))
+        if action == "approve":
+            blocked_ids: list[str] = []
+            for review_task_id in review_task_ids:
+                review_task = self._get_review_task_or_error(review_task_id)
+                block_reason = self._approval_block_reason(review_task)
+                if block_reason is None:
+                    continue
+                blocked_ids.append(str(review_task.id))
+            if blocked_ids:
+                raise ValueError(self._bulk_approval_block_message(blocked_ids))
 
         tasks: list[MarketReviewTask] = []
         seen: set[UUID] = set()
@@ -365,7 +400,7 @@ class ReviewService:
                 task = self.reject_review(
                     review_task_id,
                     actor_id=actor_id,
-                    rejection_reason=rejection_reason or "",
+                    rejection_reason=normalized_rejection_reason,
                     rejection_notes=notes,
                 )
             tasks.append(task)
@@ -411,6 +446,57 @@ class ReviewService:
             return REVIEW_STATUS_IN_PROGRESS
 
         return current_status or REVIEW_STATUS_PENDING
+
+    @staticmethod
+    def _bulk_approval_block_message(blocked_ids: list[str]) -> str:
+        preview = "、".join(blocked_ids[:5])
+        suffix = " 等" if len(blocked_ids) > 5 else ""
+        return f"选中的 {len(blocked_ids)} 条任务当前不允许批准：{preview}{suffix}"
+
+    @staticmethod
+    def _bulk_rejection_reason_required_message(task_ids: list[str]) -> str:
+        preview = "、".join(task_ids[:5])
+        suffix = " 等" if len(task_ids) > 5 else ""
+        return f"选中的 {len(task_ids)} 条任务仍需要人工填写退回原因：{preview}{suffix}"
+
+    def _approval_block_reason(self, review_task: MarketReviewTask) -> str | None:
+        classification_result = self.db.get(MarketClassificationResult, review_task.classification_result_id)
+        if classification_result is None:
+            return "当前审核任务缺少正式分类结果，不能直接批准"
+        if not classification_result.primary_category_code:
+            return "当前审核任务缺少正式主类别，不能直接批准"
+        if (
+            classification_result.classification_status == "Blocked"
+            or classification_result.admission_bucket_code == "LIST_BLACK"
+        ):
+            return "当前审核任务已命中阻断规则，应拒绝或自动拦截，不能批准"
+        return None
+
+    def _ensure_review_task_can_be_approved(self, review_task: MarketReviewTask) -> None:
+        block_reason = self._approval_block_reason(review_task)
+        if block_reason:
+            raise ValueError(block_reason)
+
+    def _default_rejection_reason(self, review_task: MarketReviewTask) -> str | None:
+        if self._approval_block_reason(review_task) is None:
+            return None
+
+        classification_result = self.db.get(MarketClassificationResult, review_task.classification_result_id)
+        if classification_result is not None:
+            if failure_reason_code := _normalize_optional_text(classification_result.failure_reason_code):
+                return failure_reason_code
+            if (
+                classification_result.classification_status == "Blocked"
+                or classification_result.admission_bucket_code == "LIST_BLACK"
+            ):
+                return "TAG_BLACKLIST_MATCH"
+            if not classification_result.primary_category_code:
+                return "TAG_NO_CATEGORY_MATCH"
+
+        if review_reason_code := _normalize_optional_text(review_task.review_reason_code):
+            return review_reason_code
+
+        return "TAG_MANUAL_REVIEW"
 
     def _write_audit_log(
         self,

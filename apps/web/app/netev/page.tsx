@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { apiGet, apiPost } from "@/lib/api"
@@ -27,6 +28,12 @@ type NetEVCandidate = {
   rejection_reason_description: string | null
   scoring_recommendation: string | null
   dq_status: string | null
+  dq_checked_at: string | null
+  dq_blocking_reason_codes: string[]
+  dq_warning_reason_codes: string[]
+  dq_primary_reason_code: string | null
+  dq_primary_reason_name: string | null
+  dq_primary_reason_description: string | null
   rule_version: string
   evaluated_at: string
 }
@@ -48,6 +55,18 @@ function getErrorMessage(error: unknown): string {
     }
   }
   return "发生了未知错误，请稍后重试"
+}
+
+const DQ_STATUS_LABELS: Record<string, string> = {
+  pass: "通过",
+  warn: "告警",
+  fail: "失败",
+}
+
+const DQ_STATUS_STYLES: Record<string, string> = {
+  pass: "border-emerald-400/30 bg-emerald-500/10 text-emerald-50",
+  warn: "border-amber-400/30 bg-amber-500/10 text-amber-50",
+  fail: "border-rose-400/30 bg-rose-500/10 text-rose-50",
 }
 
 function MetricCard({
@@ -99,6 +118,33 @@ function FilterButton({
 
 function Chip({ label }: { label: string }) {
   return <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-slate-200">{label}</span>
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"
+}
+
+function getDQStatusLabel(value: string | null | undefined) {
+  if (!value) {
+    return "-"
+  }
+  return DQ_STATUS_LABELS[value] ?? value
+}
+
+function isBlockedByDQ(candidate: NetEVCandidate) {
+  return Boolean(candidate.dq_status && candidate.dq_status !== "pass")
+}
+
+function DQStatusChip({ status }: { status: string }) {
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-xs ${
+        DQ_STATUS_STYLES[status] ?? "border-white/10 bg-black/20 text-slate-200"
+      }`}
+    >
+      {`DQ ${getDQStatusLabel(status)}`}
+    </span>
+  )
 }
 
 export default function NetEVPage() {
@@ -159,7 +205,7 @@ export default function NetEVPage() {
         guides={[
           {
             title: "先看什么",
-            description: "先看最终 admit / reject，再看 NetEV 是否为正，以及 rejection reason 写了什么。",
+            description: "先看最终 admit / reject，再分清是 NetEV 本身不够，还是先被 DQ / scoring 闸门挡住。",
           },
           {
             title: "什么时候算异常",
@@ -167,7 +213,7 @@ export default function NetEVPage() {
           },
           {
             title: "下一步去哪",
-            description: "准入结果稳定后，再去看 risk、backtests 和 reports 判断能否进入更下游链路。",
+            description: "若是 DQ 挡住，先去 `/dq` 看板；若是 NetEV 本身不足，再看 calibration、scoring 和成本项。",
           },
         ]}
       />
@@ -229,7 +275,7 @@ export default function NetEVPage() {
                 {candidate.time_bucket ? <Chip label={candidate.time_bucket} /> : null}
                 {candidate.liquidity_tier ? <Chip label={candidate.liquidity_tier} /> : null}
                 {candidate.calibration_sample_count !== null ? <Chip label={`样本 ${candidate.calibration_sample_count}`} /> : null}
-                {candidate.dq_status ? <Chip label={`DQ ${candidate.dq_status}`} /> : null}
+                {candidate.dq_status ? <DQStatusChip status={candidate.dq_status} /> : null}
                 {candidate.scoring_recommendation ? <Chip label={`评分 ${candidate.scoring_recommendation}`} /> : null}
               </div>
 
@@ -243,6 +289,56 @@ export default function NetEVPage() {
                 />
                 <MetricCard label="NetEV" value={`${(candidate.net_ev * 100).toFixed(2)}%`} tone={candidate.net_ev >= 0 ? "emerald" : "rose"} />
               </div>
+
+              {isBlockedByDQ(candidate) ? (
+                <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-slate-200">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-medium text-amber-100">DQ 闸门已拦截本次 NetEV 准入</p>
+                      <p className="mt-2 leading-6 text-slate-300">
+                        最新 DQ 状态是 {getDQStatusLabel(candidate.dq_status)}，而当前 NetEV 只接受 `pass`。
+                        这表示市场先被 DQ 挡住了，还没进入真正的自动准入判断。
+                      </p>
+                    </div>
+                    <Link
+                      href="/dq"
+                      className="inline-flex items-center justify-center rounded-full border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100 transition hover:bg-amber-500/20"
+                    >
+                      去 DQ 看板排查
+                    </Link>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-slate-400">最新 DQ 时间</p>
+                      <p className="mt-2 text-sm text-slate-200">{formatTimestamp(candidate.dq_checked_at)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-slate-400">市场 ID</p>
+                      <p className="mt-2 text-sm text-slate-200">{candidate.market_id ?? candidate.market_ref_id}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-slate-400">首要 DQ 原因</p>
+                      <p className="mt-2 text-sm text-slate-200">
+                        {candidate.dq_primary_reason_name || candidate.dq_primary_reason_code || "当前未记录"}
+                      </p>
+                      {candidate.dq_primary_reason_code ? (
+                        <p className="mt-1 text-xs text-slate-500">{candidate.dq_primary_reason_code}</p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs text-slate-400">DQ 原因摘要</p>
+                      <p className="mt-2 text-sm text-slate-200">
+                        {[...candidate.dq_blocking_reason_codes, ...candidate.dq_warning_reason_codes].slice(0, 3).join("，") || "-"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {candidate.dq_primary_reason_description ? (
+                    <p className="mt-3 text-sm leading-6 text-slate-300">{candidate.dq_primary_reason_description}</p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {candidate.rejection_reason_code ? (
                 <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-slate-200">

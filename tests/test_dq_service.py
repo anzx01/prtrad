@@ -172,7 +172,11 @@ def test_dq_idempotency(test_db, test_settings, sample_market, monkeypatch):
     assert result2["skipped_existing"] == 1
 
 
+<<<<<<< HEAD
 def test_evaluate_markets_skips_active_markets_after_close_time(test_db, test_settings, monkeypatch):
+=======
+def test_active_market_snapshot_after_close_time_does_not_fail(test_db, test_settings, monkeypatch):
+>>>>>>> 763b0638233b34d0f7bc63a042aae7fa780333dc
     import services.dq.service as dq_service_module
 
     def mock_session_scope():
@@ -195,6 +199,7 @@ def test_evaluate_markets_skips_active_markets_after_close_time(test_db, test_se
     monkeypatch.setattr(dq_service_module, "session_scope", mock_session_scope)
 
     session = test_db()
+<<<<<<< HEAD
     expired_market = Market(
         market_id="expired_active_market",
         question="expired active market",
@@ -244,19 +249,63 @@ def test_evaluate_markets_skips_active_markets_after_close_time(test_db, test_se
             ),
         ]
     )
+=======
+    checked_at = datetime(2026, 4, 18, 12, 0, tzinfo=UTC)
+    market = Market(
+        market_id="post-close-active-market",
+        question="Can an active market still have snapshots after close_time?",
+        description="A complete market record",
+        market_status="active_accepting_orders",
+        outcomes=["Yes", "No"],
+        clob_token_ids=["yes-token", "no-token"],
+        creation_time=datetime(2026, 4, 10, 8, 0, tzinfo=UTC),
+        open_time=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+        close_time=datetime(2026, 4, 17, 15, 0, tzinfo=UTC),
+        source_updated_at=checked_at,
+    )
+    session.add(market)
+    session.commit()
+
+    snapshot = MarketSnapshot(
+        market_ref_id=market.id,
+        snapshot_time=datetime(2026, 4, 18, 11, 59, 50, tzinfo=UTC),
+        best_bid_no=Decimal("0.45"),
+        best_ask_no=Decimal("0.55"),
+        best_bid_yes=Decimal("0.45"),
+        best_ask_yes=Decimal("0.55"),
+        spread=Decimal("0.10"),
+        top_of_book_depth=Decimal("1000"),
+        cumulative_depth_at_target_size=Decimal("500"),
+        traded_volume=Decimal("10000"),
+    )
+    session.add(snapshot)
+>>>>>>> 763b0638233b34d0f7bc63a042aae7fa780333dc
     session.commit()
     session.close()
 
     service = MarketDataQualityService(test_settings)
+<<<<<<< HEAD
     checked_at = datetime(2026, 4, 10, 8, 5, tzinfo=UTC)
+=======
+>>>>>>> 763b0638233b34d0f7bc63a042aae7fa780333dc
     result = service.evaluate_markets(checked_at=checked_at, market_limit=10)
 
     assert result["selected_markets"] == 1
     assert result["created"] == 1
+<<<<<<< HEAD
 
     session = test_db()
     results = session.query(DataQualityResult).all()
     assert len(results) == 1
     saved_market = session.query(Market).filter(Market.id == results[0].market_ref_id).one()
     assert saved_market.market_id == "live_active_market"
+=======
+    assert result["fail"] == 0
+    assert result["pass"] == 1
+
+    session = test_db()
+    dq_result = session.query(DataQualityResult).filter_by(checked_at=checked_at).one()
+    assert dq_result.status == "pass"
+    assert "REJ_DATA_LEAK_RISK" not in dq_result.result_details["blocking_reason_codes"]
+>>>>>>> 763b0638233b34d0f7bc63a042aae7fa780333dc
     session.close()

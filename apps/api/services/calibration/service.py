@@ -30,6 +30,7 @@ from services.m3_helpers import (
 
 
 MIN_ACTIVE_SAMPLE_COUNT = 5
+SNAPSHOT_QUERY_CHUNK_SIZE = 500
 WINDOW_LOOKBACK_DAYS = {
     "short": 14,
     "long": 90,
@@ -198,13 +199,16 @@ class CalibrationService:
             return []
 
         market_ids = [market.id for market in markets]
-        snapshots = list(
-            self.db.scalars(
-                select(MarketSnapshot)
-                .where(MarketSnapshot.market_ref_id.in_(market_ids))
-                .order_by(MarketSnapshot.market_ref_id, MarketSnapshot.snapshot_time.desc())
-            ).all()
-        )
+        snapshots: list[MarketSnapshot] = []
+        for index in range(0, len(market_ids), SNAPSHOT_QUERY_CHUNK_SIZE):
+            batch_market_ids = market_ids[index:index + SNAPSHOT_QUERY_CHUNK_SIZE]
+            snapshots.extend(
+                self.db.scalars(
+                    select(MarketSnapshot)
+                    .where(MarketSnapshot.market_ref_id.in_(batch_market_ids))
+                    .order_by(MarketSnapshot.market_ref_id, MarketSnapshot.snapshot_time.desc())
+                ).all()
+            )
         if not snapshots:
             return []
 

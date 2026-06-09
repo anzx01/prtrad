@@ -69,3 +69,10 @@ export interface KillSwitchFormState {
 }
 
 export type ReviewAction = "approve" | "reject"
+
+export interface KillSwitchReviewDraft {
+  requestId: string
+  action: ReviewAction
+  reviewer: string
+  notes: string
+}

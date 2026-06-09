@@ -1,4 +1,4 @@
-﻿"""Kill-switch approval workflow."""
+"""Kill-switch approval workflow."""
 from __future__ import annotations
 
 import uuid

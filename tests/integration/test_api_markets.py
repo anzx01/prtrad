@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 import uuid
 
-from db.models import Market, MarketSnapshot, DataQualityResult
+from db.models import DataQualityResult, Market, MarketClassificationResult, MarketSnapshot
 
 
 def test_list_markets_empty(client):
@@ -160,6 +160,87 @@ def test_list_markets_search(client):
     data = response.json()
     assert len(data["markets"]) == 1
     assert "rain" in data["markets"][0]["question"].lower()
+
+
+def test_list_markets_only_allowed_filters_blocked_and_unclassified(client):
+    """Test only_allowed returns just auto-approved markets."""
+    from tests.integration.conftest import TestSessionLocal
+
+    session = TestSessionLocal()
+    try:
+        now = datetime.now(UTC)
+        allowed_market = Market(
+            id=uuid.uuid4(),
+            market_id="allowed-market",
+            question="Allowed market?",
+            market_status="active_accepting_orders",
+            category_raw="Crypto",
+            source_updated_at=now,
+        )
+        blocked_market = Market(
+            id=uuid.uuid4(),
+            market_id="blocked-market",
+            question="Blocked market?",
+            market_status="active_accepting_orders",
+            category_raw="Esports",
+            source_updated_at=now,
+        )
+        unclassified_market = Market(
+            id=uuid.uuid4(),
+            market_id="unclassified-market",
+            question="Unclassified market?",
+            market_status="active_accepting_orders",
+            category_raw="Other",
+            source_updated_at=now,
+        )
+        session.add_all([allowed_market, blocked_market, unclassified_market])
+        session.flush()
+
+        session.add_all(
+            [
+                MarketClassificationResult(
+                    id=uuid.uuid4(),
+                    market_ref_id=allowed_market.id,
+                    rule_version="rules_v1",
+                    source_fingerprint="fp-allowed",
+                    classification_status="Tagged",
+                    primary_category_code="CAT_CRYPTO_ASSET",
+                    admission_bucket_code="LIST_WHITE",
+                    confidence=Decimal("0.95"),
+                    requires_review=False,
+                    conflict_count=0,
+                    failure_reason_code=None,
+                    result_details={"source": "integration-test"},
+                    classified_at=now,
+                ),
+                MarketClassificationResult(
+                    id=uuid.uuid4(),
+                    market_ref_id=blocked_market.id,
+                    rule_version="rules_v1",
+                    source_fingerprint="fp-blocked",
+                    classification_status="Blocked",
+                    primary_category_code="CAT_SPORTS",
+                    admission_bucket_code="LIST_BLACK",
+                    confidence=Decimal("0.80"),
+                    requires_review=False,
+                    conflict_count=0,
+                    failure_reason_code="TAG_BLACKLIST_MATCH",
+                    result_details={"source": "integration-test"},
+                    classified_at=now,
+                ),
+            ]
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get("/markets?only_allowed=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert len(data["markets"]) == 1
+    assert data["markets"][0]["market_id"] == "allowed-market"
+    assert data["markets"][0]["latest_classification"]["admission_bucket_code"] == "LIST_WHITE"
 
 
 def test_get_market_detail(client):

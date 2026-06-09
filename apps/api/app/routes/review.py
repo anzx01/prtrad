@@ -52,7 +52,7 @@ class ApproveReviewRequest(BaseModel):
 
 class RejectReviewRequest(BaseModel):
     actor_id: str = Field(..., description="Reviewer ID")
-    rejection_reason: str = Field(..., description="Rejection reason code")
+    rejection_reason: str | None = Field(None, description="Rejection reason code")
     rejection_notes: str | None = Field(None, description="Rejection notes")
 
 
@@ -64,7 +64,138 @@ class BulkReviewActionRequest(BaseModel):
     notes: str | None = Field(None, description="Shared notes")
 
 
+def _serialize_classification_result_summary(task: Any) -> dict[str, Any] | None:
+    classification_result = getattr(task, "classification_result", None)
+    if classification_result is None:
+        return None
+    return {
+        "id": str(classification_result.id),
+        "classification_status": classification_result.classification_status,
+        "primary_category_code": classification_result.primary_category_code,
+        "confidence": (
+            float(classification_result.confidence)
+            if classification_result.confidence is not None
+            else None
+        ),
+        "requires_review": classification_result.requires_review,
+        "conflict_count": classification_result.conflict_count,
+    }
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _approval_block_reason_from_task(task: Any) -> str | None:
+    classification_result = getattr(task, "classification_result", None)
+    if classification_result is None:
+        return "当前审核任务缺少正式分类结果，不能直接批准。"
+    if not classification_result.primary_category_code:
+        return "当前审核任务缺少正式主类别，不能直接批准。"
+    if (
+        classification_result.classification_status == "Blocked"
+        or getattr(classification_result, "admission_bucket_code", None) == "LIST_BLACK"
+    ):
+        return "当前审核任务已命中阻断规则，应拒绝或自动拦截，不能批准。"
+    return None
+
+
+def _auto_reject_reason_code_from_task(task: Any) -> str | None:
+    if _approval_block_reason_from_task(task) is None:
+        return None
+
+    classification_result = getattr(task, "classification_result", None)
+    if classification_result is not None:
+        if failure_reason_code := _normalize_optional_text(
+            getattr(classification_result, "failure_reason_code", None)
+        ):
+            return failure_reason_code
+        if (
+            classification_result.classification_status == "Blocked"
+            or getattr(classification_result, "admission_bucket_code", None) == "LIST_BLACK"
+        ):
+            return "TAG_BLACKLIST_MATCH"
+        if not classification_result.primary_category_code:
+            return "TAG_NO_CATEGORY_MATCH"
+
+    if review_reason_code := _normalize_optional_text(getattr(task, "review_reason_code", None)):
+        return review_reason_code
+
+    return "TAG_MANUAL_REVIEW"
+
+
+def _system_guidance_from_task(task: Any) -> dict[str, str]:
+    queue_status = normalize_review_status(getattr(task, "queue_status", None)) or "pending"
+    classification_result = getattr(task, "classification_result", None)
+    approval_block_reason = _approval_block_reason_from_task(task)
+
+    if queue_status == "approved":
+        return {
+            "system_conclusion_code": "ALREADY_APPROVED",
+            "system_conclusion": "这条任务已处理完成",
+            "system_reason": "这条任务已经批准，无需再继续处理。",
+            "system_next_action": "view_only",
+            "system_next_action_label": "查看结果",
+        }
+    if queue_status == "rejected":
+        return {
+            "system_conclusion_code": "ALREADY_REJECTED",
+            "system_conclusion": "这条任务已退回",
+            "system_reason": "这条任务已经退回，无需再继续处理。",
+            "system_next_action": "view_only",
+            "system_next_action_label": "查看结果",
+        }
+    if queue_status == "cancelled":
+        return {
+            "system_conclusion_code": "ALREADY_CANCELLED",
+            "system_conclusion": "这条任务已被系统关闭",
+            "system_reason": "这条任务已经被系统取消或关闭，无需再继续处理。",
+            "system_next_action": "view_only",
+            "system_next_action_label": "查看结果",
+        }
+    if approval_block_reason is None:
+        return {
+            "system_conclusion_code": "APPROVE_READY",
+            "system_conclusion": "系统已形成可采纳结论",
+            "system_reason": "正式主类别已经产出；核对市场信息无误后，通常可以直接批准。",
+            "system_next_action": "approve",
+            "system_next_action_label": "直接批准",
+        }
+    if classification_result is None:
+        return {
+            "system_conclusion_code": "CLASSIFICATION_RESULT_MISSING",
+            "system_conclusion": "系统还没有拿到正式分类结果",
+            "system_reason": "当前缺少正式分类结果，这类任务不应直接批准，更适合退回或等待重分类。",
+            "system_next_action": "reject",
+            "system_next_action_label": "直接退回",
+        }
+    if (
+        classification_result.classification_status == "Blocked"
+        or getattr(classification_result, "admission_bucket_code", None) == "LIST_BLACK"
+    ):
+        return {
+            "system_conclusion_code": "AUTO_BLOCKED",
+            "system_conclusion": "系统已判断这条不应放行",
+            "system_reason": "这条任务命中了阻断规则，应直接退回或自动拦截，不建议人工放行。",
+            "system_next_action": "reject",
+            "system_next_action_label": "直接退回",
+        }
+    return {
+        "system_conclusion_code": "PRIMARY_CATEGORY_MISSING",
+        "system_conclusion": "系统还没有形成可采纳主类别",
+        "system_reason": "主类别仍为空，说明自动分类还没有形成可接受结论，这类任务不应直接批准。",
+        "system_next_action": "reject",
+        "system_next_action_label": "直接退回",
+    }
+
+
 def _serialize_task_summary(task: Any) -> dict[str, Any]:
+    approval_block_reason = _approval_block_reason_from_task(task)
+    auto_reject_reason_code = _auto_reject_reason_code_from_task(task)
+    system_guidance = _system_guidance_from_task(task)
     return {
         "id": str(task.id),
         "market_ref_id": str(task.market_ref_id),
@@ -77,6 +208,11 @@ def _serialize_task_summary(task: Any) -> dict[str, Any]:
         "resolved_at": task.resolved_at.isoformat() if task.resolved_at else None,
         "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),
+        "classification_result": _serialize_classification_result_summary(task),
+        "can_approve": approval_block_reason is None,
+        "approval_block_reason": approval_block_reason,
+        "auto_reject_reason_code": auto_reject_reason_code,
+        **system_guidance,
         "market": {
             "market_id": task.market.market_id,
             "question": task.market.question,
@@ -93,14 +229,6 @@ def _serialize_task_detail(task: Any) -> dict[str, Any]:
         "description": task.market.description,
         "market_status": task.market.market_status,
     } if task.market else None
-    task_data["classification_result"] = {
-        "id": str(task.classification_result.id),
-        "classification_status": task.classification_result.classification_status,
-        "primary_category_code": task.classification_result.primary_category_code,
-        "confidence": float(task.classification_result.confidence) if task.classification_result.confidence else None,
-        "requires_review": task.classification_result.requires_review,
-        "conflict_count": task.classification_result.conflict_count,
-    } if task.classification_result else None
     return task_data
 
 

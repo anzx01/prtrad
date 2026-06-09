@@ -7,18 +7,22 @@ import {
   ConsolePanel,
 } from "../components/console-ui"
 import { STATE_COLORS, STATE_PANEL_STYLES, formatRiskStateLabel } from "./constants"
-import type { RiskPriority, RiskSpotlight } from "./insights"
+import type { RiskHeadlineAction, RiskJumpTarget, RiskPriority, RiskSpotlight } from "./insights"
 import type { StateEvent } from "./types"
 
 export function RiskPageHeader({
   computing,
   onCompute,
+  actions,
+  onJump,
   title,
   summary,
   tone,
 }: {
   computing: boolean
   onCompute: () => void
+  actions: RiskHeadlineAction[]
+  onJump: (target: RiskJumpTarget) => void
   title: string
   summary: string
   tone: "safe" | "warning" | "danger"
@@ -36,14 +40,21 @@ export function RiskPageHeader({
       description={summary}
       tone={toneClassName as "good" | "warn" | "bad"}
       actions={
-        <ConsoleButton
-          onClick={onCompute}
-          disabled={computing}
-          tone="primary"
-          type="button"
-        >
-          {computing ? "计算中..." : "重算暴露"}
-        </ConsoleButton>
+        <>
+          <ConsoleButton
+            onClick={onCompute}
+            disabled={computing}
+            tone="primary"
+            type="button"
+          >
+            {computing ? "计算中..." : "重算暴露"}
+          </ConsoleButton>
+          {actions.map((action) => (
+            <ConsoleButton key={`${action.target}-${action.label}`} onClick={() => onJump(action.target)} type="button" size="sm">
+              {action.label}
+            </ConsoleButton>
+          ))}
+        </>
       }
     />
   )
@@ -65,9 +76,11 @@ function priorityToneLabel(tone: "info" | "good" | "warn" | "bad") {
 export function RiskPrioritySection({
   priorities,
   spotlight,
+  onJump,
 }: {
   priorities: RiskPriority[]
   spotlight: RiskSpotlight
+  onJump: (target: RiskJumpTarget) => void
 }) {
   return (
     <section className="mb-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
@@ -86,6 +99,9 @@ export function RiskPrioritySection({
                 <ConsoleBadge label={priorityToneLabel(priority.tone)} tone={priority.tone} />
               </div>
               <ConsoleBadge label={priority.badge} tone={priority.tone} />
+              <ConsoleButton type="button" size="sm" onClick={() => onJump(priority.target)}>
+                {priority.cta}
+              </ConsoleButton>
             </ConsoleInset>
           ))}
         </div>
