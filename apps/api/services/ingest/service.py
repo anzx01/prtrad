@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import Settings, get_settings
 from db.models import Market, MarketSnapshot
@@ -236,6 +236,71 @@ def _clamp_probability(value: Decimal | None) -> Decimal | None:
     return value
 
 
+def _resolve_binary_book_from_payload(payload: dict[str, Any]) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
+    best_bid_yes = _clamp_probability(_decimal_or_none(payload.get("best_bid")))
+    best_ask_yes = _clamp_probability(_decimal_or_none(payload.get("best_ask")))
+    spread = _decimal_or_none(payload.get("spread"))
+
+    if spread is not None and spread < 0:
+        spread = Decimal("0")
+
+    # Some source payloads only expose one side of the quote plus spread.
+    if best_bid_yes is None and best_ask_yes is not None and spread is not None:
+        best_bid_yes = _clamp_probability(best_ask_yes - spread)
+    if best_ask_yes is None and best_bid_yes is not None and spread is not None:
+        best_ask_yes = _clamp_probability(best_bid_yes + spread)
+
+    if best_bid_yes is None or best_ask_yes is None or best_bid_yes > best_ask_yes:
+        return None, None, spread
+
+    if spread is None:
+        spread = best_ask_yes - best_bid_yes
+    if spread < 0:
+        spread = Decimal("0")
+
+    return best_bid_yes, best_ask_yes, spread
+
+
+def _complete_binary_quotes(
+    *,
+    best_bid_yes: Decimal | None,
+    best_ask_yes: Decimal | None,
+    best_bid_no: Decimal | None,
+    best_ask_no: Decimal | None,
+    spread: Decimal | None,
+) -> tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None, Decimal | None]:
+    if best_bid_yes is None and best_ask_no is not None:
+        best_bid_yes = _clamp_probability(Decimal("1") - best_ask_no)
+    if best_ask_yes is None and best_bid_no is not None:
+        best_ask_yes = _clamp_probability(Decimal("1") - best_bid_no)
+    if best_bid_no is None and best_ask_yes is not None:
+        best_bid_no = _clamp_probability(Decimal("1") - best_ask_yes)
+    if best_ask_no is None and best_bid_yes is not None:
+        best_ask_no = _clamp_probability(Decimal("1") - best_bid_yes)
+
+    if spread is not None and spread < 0:
+        spread = Decimal("0")
+
+    if spread is not None:
+        if best_bid_yes is None and best_ask_yes is not None:
+            best_bid_yes = _clamp_probability(best_ask_yes - spread)
+        if best_ask_yes is None and best_bid_yes is not None:
+            best_ask_yes = _clamp_probability(best_bid_yes + spread)
+        if best_bid_no is None and best_ask_no is not None:
+            best_bid_no = _clamp_probability(best_ask_no - spread)
+        if best_ask_no is None and best_bid_no is not None:
+            best_ask_no = _clamp_probability(best_bid_no + spread)
+
+    if spread is None and best_bid_no is not None and best_ask_no is not None:
+        spread = best_ask_no - best_bid_no
+    if spread is None and best_bid_yes is not None and best_ask_yes is not None:
+        spread = best_ask_yes - best_bid_yes
+    if spread is not None and spread < 0:
+        spread = Decimal("0")
+
+    return best_bid_yes, best_ask_yes, best_bid_no, best_ask_no, spread
+
+
 def _resolve_binary_tokens(outcomes: list[str] | None, token_ids: list[str] | None) -> tuple[str, str] | None:
     """解析二元市场的 YES/NO token。
 
@@ -256,6 +321,14 @@ def _coerce_payload_dict(payload: Any) -> dict[str, Any]:
     if isinstance(payload, dict):
         return payload
     return {}
+
+
+def _active_market_eligibility_clause(reference_time: datetime):
+    """Keep the runnable chain focused on markets that are still tradable by close_time."""
+    return (
+        Market.market_status.in_(ACTIVE_MARKET_STATUSES),
+        or_(Market.close_time.is_(None), Market.close_time > reference_time),
+    )
 
 
 class PolymarketIngestService:
@@ -443,7 +516,7 @@ class PolymarketIngestService:
         with session_scope() as session:
             stmt = (
                 select(Market)
-                .where(Market.market_status.in_(ACTIVE_MARKET_STATUSES))
+                .where(*_active_market_eligibility_clause(triggered_at))
                 .order_by(Market.source_updated_at.desc(), Market.updated_at.desc())
             )
             if effective_market_limit:
@@ -503,13 +576,22 @@ class PolymarketIngestService:
                     stats["skipped_missing_order_books"] += 1
                     continue
 
+                payload = self._market_payload(market)
+                payload_bid_yes, payload_ask_yes, payload_spread = _resolve_binary_book_from_payload(payload)
+                best_bid_yes = _best_bid(yes_book.get("bids", [])) or payload_bid_yes
+                best_ask_yes = _best_ask(yes_book.get("asks", [])) or payload_ask_yes
                 no_bid = _best_bid(no_book.get("bids", []))
                 no_ask = _best_ask(no_book.get("asks", []))
+                best_bid_yes, best_ask_yes, no_bid, no_ask, spread = _complete_binary_quotes(
+                    best_bid_yes=best_bid_yes,
+                    best_ask_yes=best_ask_yes,
+                    best_bid_no=no_bid,
+                    best_ask_no=no_ask,
+                    spread=payload_spread,
+                )
                 no_top_depth = _size_at_price(no_book.get("bids", []), no_bid) + _size_at_price(
                     no_book.get("asks", []), no_ask
                 )
-
-                payload = self._market_payload(market)
 
                 session.add(
                     MarketSnapshot(
@@ -517,10 +599,10 @@ class PolymarketIngestService:
                         snapshot_time=triggered_at,
                         best_bid_no=no_bid,
                         best_ask_no=no_ask,
-                        best_bid_yes=_best_bid(yes_book.get("bids", [])),
-                        best_ask_yes=_best_ask(yes_book.get("asks", [])),
+                        best_bid_yes=best_bid_yes,
+                        best_ask_yes=best_ask_yes,
                         last_trade_price_no=_decimal_or_none(no_book.get("last_trade_price")),
-                        spread=(no_ask - no_bid) if no_ask is not None and no_bid is not None else None,
+                        spread=spread,
                         top_of_book_depth=no_top_depth,
                         cumulative_depth_at_target_size=_cumulative_target_depth(
                             no_book.get("asks", []),
@@ -600,21 +682,14 @@ class PolymarketIngestService:
     ) -> MarketSnapshot | None:
         payload = self._market_payload(market)
 
-        best_bid_yes = _clamp_probability(_decimal_or_none(payload.get("best_bid")))
-        best_ask_yes = _clamp_probability(_decimal_or_none(payload.get("best_ask")))
-        if best_bid_yes is None or best_ask_yes is None or best_bid_yes > best_ask_yes:
+        best_bid_yes, best_ask_yes, spread = _resolve_binary_book_from_payload(payload)
+        if best_bid_yes is None or best_ask_yes is None or spread is None:
             return None
 
         best_bid_no = _clamp_probability(Decimal("1") - best_ask_yes)
         best_ask_no = _clamp_probability(Decimal("1") - best_bid_yes)
         if best_bid_no is None or best_ask_no is None:
             return None
-
-        spread = _decimal_or_none(payload.get("spread"))
-        if spread is None:
-            spread = best_ask_no - best_bid_no
-        if spread < 0:
-            spread = Decimal("0")
 
         liquidity = _decimal_or_none(payload.get("liquidity_clob")) or Decimal("0")
         if liquidity < 0:

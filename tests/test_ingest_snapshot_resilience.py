@@ -46,6 +46,31 @@ class _FlakyClobClient:
         return [_book(token_id, "0.40", "0.60")]
 
 
+class _OneSidedClobClient:
+    def get_order_books(self, token_ids: list[str]) -> list[dict[str, object]]:
+        books: list[dict[str, object]] = []
+        for token_id in token_ids:
+            if token_id.startswith("yes"):
+                books.append(
+                    {
+                        "asset_id": token_id,
+                        "bids": [],
+                        "asks": [{"price": "0.93", "size": "12"}],
+                        "last_trade_price": None,
+                    }
+                )
+            else:
+                books.append(
+                    {
+                        "asset_id": token_id,
+                        "bids": [{"price": "0.07", "size": "8"}],
+                        "asks": [],
+                        "last_trade_price": "0.99",
+                    }
+                )
+        return books
+
+
 def _patch_session_scope(monkeypatch, test_db) -> None:
     import services.ingest.service as ingest_service_module
 
@@ -224,4 +249,179 @@ def test_capture_snapshots_falls_back_to_source_payload_when_books_unavailable(t
     assert snapshots[0].best_ask_no == Decimal("0.58")
     assert snapshots[0].top_of_book_depth == Decimal("50")
     assert snapshots[0].cumulative_depth_at_target_size == Decimal("50")
+    session.close()
+
+
+def test_capture_snapshots_skips_active_markets_after_close_time(test_db, test_settings, monkeypatch):
+    _patch_session_scope(monkeypatch, test_db)
+
+    session = test_db()
+    session.add_all(
+        [
+            Market(
+                id=uuid.uuid4(),
+                market_id="snapshot-expired-active",
+                question="expired active market",
+                market_status="active_accepting_orders",
+                outcomes=["Yes", "No"],
+                clob_token_ids=["yes-expired", "no-expired"],
+                close_time=datetime(2026, 4, 10, 7, 0, tzinfo=UTC),
+                source_updated_at=datetime.now(UTC),
+                source_payload={"market": {"volume_24hr_clob": "12.0"}},
+            ),
+            Market(
+                id=uuid.uuid4(),
+                market_id="snapshot-eligible-active",
+                question="eligible active market",
+                market_status="active_accepting_orders",
+                outcomes=["Yes", "No"],
+                clob_token_ids=["yes-live", "no-live"],
+                close_time=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+                source_updated_at=datetime.now(UTC),
+                source_payload={"market": {"volume_24hr_clob": "18.0"}},
+            ),
+        ]
+    )
+    session.commit()
+    session.close()
+
+    clob_client = _FlakyClobClient(fail_on_multi=True)
+    service = PolymarketIngestService(
+        settings=Settings(
+            database_url=test_settings.database_url,
+            ingest_clob_batch_size=4,
+            ingest_snapshot_market_limit=200,
+            ingest_allow_source_payload_fallback=False,
+        ),
+        gamma_client=_DummyGammaClient(),
+        clob_client=clob_client,
+    )
+
+    triggered_at = datetime(2026, 4, 10, 8, 0, tzinfo=UTC)
+    result = service.capture_snapshots(triggered_at=triggered_at)
+
+    assert result["selected_markets"] == 1
+    assert result["created"] == 1
+
+    session = test_db()
+    snapshots = session.query(MarketSnapshot).all()
+    assert len(snapshots) == 1
+    snapshot_market = session.query(Market).filter(Market.id == snapshots[0].market_ref_id).one()
+    assert snapshot_market.market_id == "snapshot-eligible-active"
+    session.close()
+
+
+def test_capture_snapshots_fills_one_sided_payload_quotes_with_spread(test_db, test_settings, monkeypatch):
+    _patch_session_scope(monkeypatch, test_db)
+
+    session = test_db()
+    market = Market(
+        id=uuid.uuid4(),
+        market_id="snapshot-one-sided-fallback",
+        question="snapshot one sided fallback",
+        market_status="active_accepting_orders",
+        outcomes=["Yes", "No"],
+        clob_token_ids=["yes-one-sided", "no-one-sided"],
+        source_updated_at=datetime.now(UTC),
+        source_payload={
+            "market": {
+                "best_bid": None,
+                "best_ask": "0.93",
+                "spread": "0.93",
+                "liquidity_clob": "6.9",
+                "volume_clob": "28.25",
+            }
+        },
+    )
+    session.add(market)
+    session.commit()
+    market_id = market.id
+    session.close()
+
+    clob_client = _FlakyClobClient(fail_on_multi=True)
+    service = PolymarketIngestService(
+        settings=Settings(
+            database_url=test_settings.database_url,
+            ingest_clob_batch_size=4,
+            ingest_snapshot_market_limit=200,
+            ingest_allow_source_payload_fallback=True,
+        ),
+        gamma_client=_DummyGammaClient(),
+        clob_client=clob_client,
+    )
+
+    triggered_at = datetime(2026, 4, 10, 8, 15, tzinfo=UTC)
+    result = service.capture_snapshots(triggered_at=triggered_at)
+
+    assert result["selected_markets"] == 1
+    assert result["created"] == 1
+    assert result["created_from_source_payload"] == 1
+
+    session = test_db()
+    snapshot = session.query(MarketSnapshot).one()
+    assert snapshot.market_ref_id == market_id
+    assert snapshot.best_bid_yes == Decimal("0")
+    assert snapshot.best_ask_yes == Decimal("0.93")
+    assert snapshot.best_bid_no == Decimal("0.07")
+    assert snapshot.best_ask_no == Decimal("1")
+    assert snapshot.spread == Decimal("0.93")
+    assert snapshot.top_of_book_depth == Decimal("6.9")
+    assert snapshot.traded_volume == Decimal("28.25")
+    session.close()
+
+
+def test_capture_snapshots_completes_one_sided_order_books_from_payload_spread(test_db, test_settings, monkeypatch):
+    _patch_session_scope(monkeypatch, test_db)
+
+    session = test_db()
+    market = Market(
+        id=uuid.uuid4(),
+        market_id="snapshot-one-sided-orderbook",
+        question="snapshot one sided orderbook",
+        market_status="active_accepting_orders",
+        outcomes=["Yes", "No"],
+        clob_token_ids=["yes-orderbook", "no-orderbook"],
+        source_updated_at=datetime.now(UTC),
+        source_payload={
+            "market": {
+                "best_bid": None,
+                "best_ask": "0.93",
+                "spread": "0.93",
+                "liquidity_clob": "6.9",
+                "volume_clob": "28.25",
+            }
+        },
+    )
+    session.add(market)
+    session.commit()
+    market_id = market.id
+    session.close()
+
+    service = PolymarketIngestService(
+        settings=Settings(
+            database_url=test_settings.database_url,
+            ingest_clob_batch_size=4,
+            ingest_snapshot_market_limit=200,
+            ingest_allow_source_payload_fallback=False,
+        ),
+        gamma_client=_DummyGammaClient(),
+        clob_client=_OneSidedClobClient(),
+    )
+
+    triggered_at = datetime(2026, 4, 10, 8, 20, tzinfo=UTC)
+    result = service.capture_snapshots(triggered_at=triggered_at)
+
+    assert result["selected_markets"] == 1
+    assert result["created"] == 1
+    assert result["book_fetch_failed_tokens"] == 0
+
+    session = test_db()
+    snapshot = session.query(MarketSnapshot).one()
+    assert snapshot.market_ref_id == market_id
+    assert snapshot.best_bid_yes == Decimal("0")
+    assert snapshot.best_ask_yes == Decimal("0.93")
+    assert snapshot.best_bid_no == Decimal("0.07")
+    assert snapshot.best_ask_no == Decimal("1")
+    assert snapshot.spread == Decimal("0.93")
+    assert snapshot.last_trade_price_no == Decimal("0.99")
     session.close()

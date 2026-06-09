@@ -5,7 +5,7 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.config import Settings, get_settings
 from db.models import DataQualityResult, Market, MarketSnapshot
@@ -70,6 +70,13 @@ def _mid_price(snapshot: MarketSnapshot | None) -> float | None:
     return None
 
 
+def _active_market_eligibility_clause(reference_time: datetime):
+    return (
+        Market.market_status.in_(ACTIVE_MARKET_STATUSES),
+        or_(Market.close_time.is_(None), Market.close_time > reference_time),
+    )
+
+
 class MarketDataQualityService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -103,7 +110,7 @@ class MarketDataQualityService:
         with session_scope() as session:
             stmt = (
                 select(Market)
-                .where(Market.market_status.in_(ACTIVE_MARKET_STATUSES))
+                .where(*_active_market_eligibility_clause(checked_at))
                 .order_by(Market.source_updated_at.desc(), Market.updated_at.desc())
             )
             if effective_market_limit:
