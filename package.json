@@ -33,6 +33,7 @@
     "task:tagging-run": "powershell -Command \"$env:PYTHONPATH='workers;apps/api'; .\\.venv\\Scripts\\celery.exe -A worker.celery_app:celery_app call worker.tagging.dispatch_market_auto_classification\"",
     "task:refresh-evidence-pack": "powershell -ExecutionPolicy Bypass -File ./scripts/refresh-evidence-pack.ps1",
     "task:trading": "powershell -ExecutionPolicy Bypass -File ./scripts/trading-control.ps1",
+    "e2e:paper-trading": "powershell -ExecutionPolicy Bypass -File ./scripts/e2e-paper-trading.ps1",
     "health:dq": "powershell -ExecutionPolicy Bypass -File ./scripts/check-dq-health.ps1",
     "dq:baseline": "powershell -ExecutionPolicy Bypass -File ./scripts/run-dq-baseline.ps1",
     "dq:reason": "powershell -ExecutionPolicy Bypass -File ./scripts/investigate-dq-reason.ps1",

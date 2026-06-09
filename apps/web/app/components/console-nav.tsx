@@ -3,9 +3,11 @@
 import ApiStatus from "./ApiStatus"
 
 const NAV_ITEMS = [
-  { href: "#actions", label: "自动动作" },
-  { href: "#markets", label: "市场总表" },
-  { href: "#launch", label: "交易闸门" },
+  { href: "/", label: "驾驶舱" },
+  { href: "/#actions", label: "自动动作" },
+  { href: "/#markets", label: "市场总表" },
+  { href: "/#launch", label: "交易闸门" },
+  { href: "/paper-trading", label: "模拟交易" },
 ]
 
 export function ConsoleNav({ children }: { children: React.ReactNode }) {

@@ -452,14 +452,6 @@ class TradingService:
             )
             return blockers
 
-        if importlib.util.find_spec("py_clob_client_v2") is None:
-            blockers.append(
-                {
-                    "code": "LIVE_SDK_UNAVAILABLE",
-                    "message": "实盘 SDK 还没安装好，请先安装 `py_clob_client_v2`。",
-                }
-            )
-
         if not (self.settings.trading_live_private_key or "").strip():
             blockers.append(
                 {
@@ -541,6 +533,14 @@ class TradingService:
                 {
                     "code": "LIVE_STATUS_POLL_INTERVAL_INVALID",
                     "message": "`TRADING_LIVE_STATUS_POLL_INTERVAL_SECONDS` 不能小于 0。",
+                }
+            )
+
+        if importlib.util.find_spec("py_clob_client_v2") is None:
+            blockers.append(
+                {
+                    "code": "LIVE_SDK_UNAVAILABLE",
+                    "message": "实盘 SDK 还没安装好，请先安装 `py_clob_client_v2`。",
                 }
             )
 

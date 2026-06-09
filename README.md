@@ -18,7 +18,7 @@
 
 ## 当前主链路
 
-`市场数据 -> 数据质量 DQ -> 标签分类 -> 自动拦截/放行 -> NetEV / 校准 -> 组合风控 -> 回测 -> 影子验证 -> 交易开关 / 自动上线`
+`市场数据 -> 数据质量 DQ -> 标签分类 -> 自动拦截/放行 -> NetEV / 校准 -> 组合风控 -> 回测 -> 纸交易订单 -> 模拟持仓/PnL -> 影子验证 -> 交易开关 / 自动上线`
 
 ## 本地启动
 
@@ -99,6 +99,7 @@ npm run task:trading -- -Action start-live
 npm run task:trading -- -Action stop
 npm run task:trading -- -Action execute-next
 npm run task:trading -- -Action orders
+npm run e2e:paper-trading
 ```
 
 测试：
@@ -108,6 +109,7 @@ npm run test:risk
 npm run test:m456
 npm run test:worker
 python -m pytest -q
+npm run e2e:paper-trading
 ```
 
 ## 单页控制台
@@ -255,6 +257,32 @@ npm run task:trading -- -Action orders
   - 默认 `true`
 - `TRADING_LIVE_RETRY_ON_ERROR`
   - 默认 `true`
+
+## 模拟交易验证
+
+`/paper-trading` 是当前用于验证策略收益的工作台。它不替代首页交易闸门，而是补上“订单之后有没有真实收益证据”这一层。
+
+当前能力：
+
+- 从最新 `NetEVCandidate(admit)` 直接创建 NO 侧模拟持仓
+- `/trading/execute-next` 产生的 filled 纸交易订单会同步落成模拟持仓
+- 根据最新 `market_snapshots` 更新 mark price 和未实现 PnL
+- 市场关闭、到期或结算时自动平仓并记录 realized PnL
+- 页面展示开放持仓、已平仓记录、总 PnL 和胜率
+
+核心接口：
+
+- `/paper-trading/summary`
+- `/paper-trading/positions`
+- `/paper-trading/evaluate`
+- `/paper-trading/mark`
+
+验证命令：
+
+```powershell
+python -m pytest tests/test_paper_trading_service.py tests/integration/test_api_paper_trading.py -q
+npm run e2e:paper-trading
+```
 
 ## Gamma API 接入约束
 

@@ -42,6 +42,31 @@ command.upgrade(config, revision)
     )
 
 
+def _current_alembic_head(repo_root: Path) -> str:
+    venv_python = repo_root / ".venv" / "Scripts" / "python.exe"
+    inline = """
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from pathlib import Path
+import sys
+
+repo_root = Path(sys.argv[1])
+config = Config(str(repo_root / "apps" / "api" / "alembic.ini"))
+config.set_main_option("script_location", str(repo_root / "apps" / "api" / "db" / "migrations"))
+heads = ScriptDirectory.from_config(config).get_heads()
+assert len(heads) == 1
+print(heads[0])
+"""
+    result = subprocess.run(
+        [str(venv_python), "-c", inline, str(repo_root)],
+        check=True,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
 def test_alembic_upgrade_head_supports_inserting_m2_report(tmp_path):
     db_path = tmp_path / "migration-smoke.sqlite3"
     repo_root = Path(__file__).resolve().parents[1]
@@ -195,7 +220,7 @@ def test_alembic_upgrade_head_recovers_sqlite_history_with_failed_m3_artifacts(t
     try:
         with Session(engine) as session:
             version = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            assert version == "20260410_0012"
+            assert version == _current_alembic_head(repo_root)
 
             metric_dates = session.execute(
                 text("SELECT metric_date FROM tag_quality_metrics ORDER BY metric_date")

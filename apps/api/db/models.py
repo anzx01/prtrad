@@ -857,3 +857,50 @@ class TradingOrderRecord(TimestampMixin, Base):
     execution_details: Mapped[dict | list | None] = mapped_column(json_type(), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PaperPosition(TimestampMixin, Base):
+    """模拟交易持仓，用于验证 NetEV 候选是否能转化为可跟踪收益。"""
+
+    __tablename__ = "paper_positions"
+    __table_args__ = (
+        Index("ix_paper_positions_status_opened_at", "status", "opened_at"),
+        Index("ix_paper_positions_market_ref_id_status", "market_ref_id", "status"),
+        Index("ix_paper_positions_candidate_id", "candidate_id"),
+        Index("ix_paper_positions_order_id", "order_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    market_ref_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("markets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("netev_candidates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("trading_order_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    strategy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    side: Mapped[str] = mapped_column(String(8), nullable=False, default="no")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    entry_price: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    size: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
+    entry_notional: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
+    mark_price: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    mark_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    unrealized_pnl: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False, default=0)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exit_price: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    exit_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+
+    market: Mapped["Market"] = relationship()
+    candidate: Mapped["NetEVCandidate | None"] = relationship()
+    order: Mapped["TradingOrderRecord | None"] = relationship()

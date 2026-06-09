@@ -1,5 +1,67 @@
 # 开发进度
 
+## 2026-06-09
+
+### 今日完成
+
+- 完成项目重聚焦研究，并更新 `docs/refocus-plan.md`：
+  - 确认当前系统已有市场接入、DQ、标签、评分、校准、NetEV、风控、回测、shadow、交易开关和纸交易订单。
+  - 明确核心缺口不是“没有订单”，而是缺少模拟持仓、盯市、平仓和 PnL 验证。
+- 补齐最小模拟交易验证闭环：
+  - 新增 `paper_positions` 持仓表和 Alembic 迁移 `20260609_0015_paper_positions.py`。
+  - 新增 `PaperTradingService`，支持从 `NetEVCandidate(admit)` 创建 NO 侧模拟持仓。
+  - 支持将已有 filled 纸交易订单同步为模拟持仓。
+  - 支持按最新快照 mark-to-market，自动计算 unrealized PnL。
+  - 支持市场关闭、到期或结算时自动平仓，并记录 realized PnL。
+- 新增 `/paper-trading` API：
+  - `GET /paper-trading/summary`
+  - `GET /paper-trading/positions`
+  - `POST /paper-trading/evaluate`
+  - `POST /paper-trading/mark`
+- 新增 `/paper-trading` 前端页面：
+  - 展示开放持仓、已平仓、未实现 PnL、已实现 PnL、总 PnL 和胜率。
+  - 支持“评估准入候选”和“刷新盯市”两个动作。
+  - 顶部导航新增“模拟交易”入口。
+- 新增 e2e 脚本：
+  - `scripts/e2e-paper-trading.ps1`
+  - `npm run e2e:paper-trading`
+- 修复 `scripts/dev-web.ps1`：
+  - 避免 npm/PowerShell 把 `--port` 当成 npm config 后传丢。
+  - 现在直接调用本地 `next.cmd dev --port <port>`。
+- 清理 `tests/test_dq_service.py` 中遗留的 Git 冲突标记：
+  - 保留当前 DQ 行为对应的测试，即 `close_time <= checked_at` 的 active 市场不进入本轮扫描。
+- 同步 README：
+  - 更新当前主链路。
+  - 补充 `/paper-trading` 页面、API 和验证命令。
+
+### 验证结果
+
+- `npm run db:upgrade` -> passed
+- `python -m pytest tests/test_paper_trading_service.py tests/integration/test_api_paper_trading.py -q` -> `5 passed`
+- `python -m pytest tests/integration/test_api_trading.py -q` -> `7 passed`
+- `python -m pytest tests/test_db_migrations.py tests/integration/test_api_netev.py tests/integration/test_api_backtests.py tests/integration/test_api_trading.py tests/test_paper_trading_service.py tests/integration/test_api_paper_trading.py -q` -> `18 passed`
+- `python -m pytest -q` -> `158 passed`
+- `npm --workspace apps/web exec tsc -- --noEmit` -> passed（npm 输出了 `--noEmit` cli config warning，不是 TypeScript 错误）
+- `powershell -ExecutionPolicy Bypass -File .\scripts\e2e-paper-trading.ps1` -> passed
+  - `created=1`
+  - `unrealized_after_mark=0.5`
+  - `realized_after_close=5.5`
+- 本地开发服务：
+  - `Invoke-WebRequest http://localhost:8000/health` -> `200`
+  - `Invoke-WebRequest http://localhost:3001/paper-trading` -> `200`
+
+### 当前状态
+
+- 当前已经具备最小交易验证闭环：`NetEV admit -> paper position -> mark-to-market -> close -> realized PnL`。
+- `/trading` 仍负责交易闸门和订单尝试；`/paper-trading` 负责持仓和收益验证。
+- 新持仓层默认支持从 NetEV 候选创建 NO 侧仓位；已有纸交易订单则按订单方向同步。
+
+### 下一步
+
+- 将组合风控暴露从“NetEV 候选暴露”逐步迁移到“模拟持仓暴露”。
+- 为模拟交易补资金曲线、最大回撤、按分类/策略版本分组统计。
+- 评估是否把 `/paper-trading/summary` 摘要接入首页总判断，但不应再次把收益验证藏回上线审批叙事里。
+
 ## 2026-05-23
 ### GitHub 公开发布前合规清理
 

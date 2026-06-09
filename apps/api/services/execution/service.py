@@ -95,6 +95,10 @@ class ExecutionService:
             order.execution_details = self._merge_execution_details(order.execution_details, result.details)
             order.completed_at = datetime.now(UTC)
             self.db.flush()
+            if resolved_mode == "paper" and result.status == "filled" and self._has_table("paper_positions"):
+                from services.paper_trading import PaperTradingService
+
+                PaperTradingService(self.db).sync_order(order)
             self._write_audit(
                 order=order,
                 action="execute_success",

@@ -16,6 +16,7 @@ from app.routes import (
     markets,
     monitoring,
     netev,
+    paper_trading,
     reason_codes,
     reports,
     review,
@@ -61,6 +62,7 @@ app.include_router(tag_quality.router)
 app.include_router(reports.router)
 app.include_router(calibration.router)
 app.include_router(netev.router)
+app.include_router(paper_trading.router)
 app.include_router(risk.router)
 app.include_router(backtests.router)
 app.include_router(shadow.router)
